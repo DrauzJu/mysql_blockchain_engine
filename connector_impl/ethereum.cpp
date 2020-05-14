@@ -2,17 +2,14 @@
 
 // todo: implement
 
-ByteData* Ethereum::get(TableName table, ByteData* key) {
-  std::cout << "Getting data for table " << table << ", key " << key->data << std::endl;
+ByteData* Ethereum::get(TableName, ByteData*) {
   return nullptr;
 }
 
-int Ethereum::put(TableName table, ByteData* key, ByteData* value) {
-  std::cout << "Putting data for table " << table << ", key " << key->data << " and value " << value->data << std::endl;
+int Ethereum::put(TableName, ByteData*, ByteData* ) {
   return 0;
 }
 
-ByteData *Ethereum::getAllKeys(TableName table) {
-  std::cout << "Getting all keys for table " << table << std::endl;
+ByteData *Ethereum::getAllKeys(TableName) {
   return nullptr;
 }

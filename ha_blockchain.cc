@@ -236,7 +236,7 @@ int ha_blockchain::open(const char *, int, uint, const dd::Table *) {
   DBUG_TRACE;
 
   std::stringstream msg;
-  msg << "Opening table, reclength: " << table->s->reclength;
+  msg << "Opening table";
   log(msg.str());
 
   if (!(share = get_share())) return 1;
@@ -298,7 +298,7 @@ int ha_blockchain::close(void) {
 int ha_blockchain::write_row(uchar *) {
   DBUG_TRACE;
   /*
-    Blockchain of a successful write_row. We don't store the data
+    Example of a successful write_row. We don't store the data
     anywhere; they are thrown away. A real implementation will
     probably need to do something with 'buf'. We report a success
     here, to pretend that the insert was successful.
