@@ -13,6 +13,8 @@
  *    - put(key, value)
  */
 
+using TableName = const char*;
+
 class ByteData {
  public:
   unsigned char *data;
@@ -21,12 +23,17 @@ class ByteData {
 
 class Connector {
  public:
-  virtual ByteData* get(ByteData* key) = 0;
+  virtual ByteData* get(TableName table, ByteData* key) = 0;
 
   /*
    * returns 0 on success, 1 on failure
    */
-  virtual int put(ByteData* key, ByteData* value) = 0;
+  virtual int put(TableName table, ByteData* key, ByteData* value) = 0;
+
+  /*
+   * returns null-terminated array
+   */
+  virtual ByteData* getAllKeys(TableName table) = 0;
 };
 
 #endif  // MYSQL_8_0_20_CONNECTOR_H
