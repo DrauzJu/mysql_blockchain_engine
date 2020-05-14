@@ -24,10 +24,10 @@ class ByteData {
 class Connector {
  public:
   /*
-   * Write single KV-pair (concatenated) into buf, starting at buf_write_index
+   * Write single KV-pair (concatenated) into byte buffer buf, starting at buf_write_index
    *
    */
-  virtual int get(TableName table, ByteData* key, ByteData* buf, int buf_write_index) = 0;
+  virtual int get(TableName table, ByteData* key, unsigned char* buf, int buf_write_index) = 0;
 
   /*
    * returns 0 on success, 1 on failure

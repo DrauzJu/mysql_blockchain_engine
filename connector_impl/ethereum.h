@@ -5,7 +5,7 @@
 
 class Ethereum : public Connector {
  public:
-  int get(TableName table, ByteData* key, ByteData* buf, int buf_write_index) override;
+  int get(TableName table, ByteData* key, unsigned char* buf, int buf_write_index) override;
   int put(TableName table, ByteData* key, ByteData* value) override;
   ByteData *getAllKeys(TableName table) override;
   ByteData *tableScan(TableName table) override;

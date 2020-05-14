@@ -3,7 +3,7 @@
 // todo: implement
 // For document of methods see connector.h
 
-int Ethereum::get(TableName, ByteData*, ByteData*, int) {
+int Ethereum::get(TableName, ByteData*, unsigned char*, int) {
   return 0;
 }
 
