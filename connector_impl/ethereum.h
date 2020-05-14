@@ -5,9 +5,10 @@
 
 class Ethereum : public Connector {
  public:
-  ByteData* get(TableName table, ByteData* key) override;
+  int get(TableName table, ByteData* key, ByteData* buf, int buf_write_index) override;
   int put(TableName table, ByteData* key, ByteData* value) override;
   ByteData *getAllKeys(TableName table) override;
+  ByteData *tableScan(TableName table) override;
 };
 
 #endif  // MYSQL_8_0_20_ETHEREUM_H

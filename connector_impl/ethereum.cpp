@@ -1,9 +1,10 @@
 #include "ethereum.h"
 
 // todo: implement
+// For document of methods see connector.h
 
-ByteData* Ethereum::get(TableName, ByteData*) {
-  return nullptr;
+int Ethereum::get(TableName, ByteData*, ByteData*, int) {
+  return 0;
 }
 
 int Ethereum::put(TableName, ByteData*, ByteData* ) {
@@ -11,5 +12,9 @@ int Ethereum::put(TableName, ByteData*, ByteData* ) {
 }
 
 ByteData *Ethereum::getAllKeys(TableName) {
+  return nullptr;
+}
+
+ByteData *Ethereum::tableScan(TableName) {
   return nullptr;
 }

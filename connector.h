@@ -23,7 +23,11 @@ class ByteData {
 
 class Connector {
  public:
-  virtual ByteData* get(TableName table, ByteData* key) = 0;
+  /*
+   * Write single KV-pair (concatenated) into buf, starting at buf_write_index
+   *
+   */
+  virtual int get(TableName table, ByteData* key, ByteData* buf, int buf_write_index) = 0;
 
   /*
    * returns 0 on success, 1 on failure
@@ -34,6 +38,12 @@ class Connector {
    * returns null-terminated array
    */
   virtual ByteData* getAllKeys(TableName table) = 0;
+
+  /*
+   * Do a table scan, returns null-terminated array of key+values
+   * --> faster than getting each KV-pair in an own transaction
+   */
+  virtual ByteData* tableScan(TableName table) = 0;
 };
 
 #endif  // MYSQL_8_0_20_CONNECTOR_H
