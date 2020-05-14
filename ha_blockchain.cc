@@ -448,13 +448,23 @@ int ha_blockchain::index_last(uchar *) {
 */
 int ha_blockchain::rnd_init(bool) {
   log("Preparing for table scan");
-  current_position = 0;
+
+  // Getting all keys and initializing position
+  // current_position = 0;
+  // keys = connector->getAllKeys(table->alias);
+
+  current_position = -1;
+  tableScanData = connector->tableScan(table->alias);
+
   DBUG_TRACE;
   return 0;
 }
 
 int ha_blockchain::rnd_end() {
   DBUG_TRACE;
+
+  // todo: clear tableScanData
+
   return 0;
 }
 
@@ -476,40 +486,8 @@ int ha_blockchain::rnd_end() {
 int ha_blockchain::rnd_next(uchar *buf) {
   DBUG_TRACE;
 
-  if(current_position < 10) {
-    log("Reading data");
-
-    ////
-    uint initial_null_bytes = table->s->null_bytes;
-    memset(buf, 0, initial_null_bytes);
-    uint pos = initial_null_bytes;
-    int i = 0;
-
-    // Loop over all fields
-    for (Field **field = table->field; *field; field++) {
-      if((*field)->type() == MYSQL_TYPE_VARCHAR ) {
-        std::string s = "Hi";
-        size_t s_length = s.length();
-        buf[pos] = s_length;
-        pos += sizeof(s_length);
-        memcpy(&(buf[pos]), s.data(), s_length);
-        pos += s_length;
-      } else {
-        buf[pos] = i + current_position;
-        pos += sizeof(int);
-        i++;
-      }
-    }
-
-    //int value = 5 + current_position;
-    // memcpy(&(buf[pos]), &value, 4);
-    ////
-
-    current_position++;
-    return 0;
-  } else {
-    return HA_ERR_END_OF_FILE;
-  }
+  current_position++; // necessary to do before fetching row so that position() still works
+  return find_current_row(buf);
 }
 
 /**
@@ -533,7 +511,10 @@ int ha_blockchain::rnd_next(uchar *buf) {
   @see
   filesort.cc, sql_select.cc, sql_delete.cc and sql_update.cc
 */
-void ha_blockchain::position(const uchar *) { DBUG_TRACE; }
+void ha_blockchain::position(const uchar *) {
+  DBUG_TRACE;
+  my_store_ptr(ref, ref_length, current_position);
+}
 
 /**
   @brief
@@ -549,11 +530,11 @@ void ha_blockchain::position(const uchar *) { DBUG_TRACE; }
   @see
   filesort.cc, records.cc, sql_insert.cc, sql_select.cc and sql_update.cc
 */
-int ha_blockchain::rnd_pos(uchar *, uchar *) {
-  int rc;
+int ha_blockchain::rnd_pos(uchar *buf, uchar *pos) {
   DBUG_TRACE;
-  rc = HA_ERR_WRONG_COMMAND;
-  return rc;
+
+  int position = my_get_ptr(pos, ref_length);
+  return find_row(position, buf);
 }
 
 /**
@@ -829,6 +810,36 @@ int ha_blockchain::create(const char *name, TABLE *, HA_CREATE_INFO *,
 
 void ha_blockchain::log(std::string msg) {
   std::cout << "[BLOCKCHAIN - " << table->alias << "] " << msg << std::endl;
+}
+
+int ha_blockchain::find_current_row(uchar *buf) {
+  return find_row(current_position, buf);
+}
+
+int ha_blockchain::find_row(int index, uchar *buf) {
+  /*ByteData* key = &(keys[current_position]);
+  current_position++;
+
+  if(key == nullptr) {
+    return HA_ERR_END_OF_FILE;
+  }
+
+  ByteData* data = connector->get(table->alias, key);*/
+
+  ByteData* data = &(tableScanData[index]);
+
+  if(data == nullptr) {
+    return HA_ERR_END_OF_FILE;
+  }
+
+  // set required zero bits
+  uint initial_null_bytes = table->s->null_bytes;
+  memset(buf, 0, initial_null_bytes);
+  uint pos = initial_null_bytes;
+
+  // Copy data
+  memcpy(&(buf[pos]), data->data, data->dataSize);
+  return 0;
 }
 
 struct st_mysql_storage_engine blockchain_storage_engine = {

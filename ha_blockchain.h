@@ -68,6 +68,8 @@ class ha_blockchain : public handler {
   Blockchain_share *get_share();  ///< Get the share
   int current_position; // current position during table scan
   Connector* connector;
+  ByteData* keys;
+  ByteData* tableScanData;
 
  public:
   ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg);
@@ -246,6 +248,9 @@ class ha_blockchain : public handler {
    * Logging helper
    */
    void log(std::string msg);
+
+  int find_current_row(uchar *buf);
+  int find_row(int index, uchar *buf);
 
   /** @brief
     Unlike index_init(), rnd_init() can be called two consecutive times
