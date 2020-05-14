@@ -109,6 +109,10 @@ static handler *blockchain_create_handler(handlerton *hton, TABLE_SHARE *table,
 
 handlerton *blockchain_hton;
 
+// System variables for configuration
+static int config_type;
+static char* config_connection;
+
 /* Interface to mysqld, to check system tables supported by SE */
 static bool blockchain_is_supported_system_table(const char *db,
                                               const char *table_name,
@@ -823,12 +827,10 @@ void ha_blockchain::log(std::string msg) {
 struct st_mysql_storage_engine blockchain_storage_engine = {
     MYSQL_HANDLERTON_INTERFACE_VERSION};
 
-static int config_type = 0;
 static MYSQL_SYSVAR_INT(bc_type_var, config_type, PLUGIN_VAR_RQCMDARG,
                         "Blockchain type (0 for Ethereum)", nullptr, nullptr, 0,
                         0, 0, 0);
 
-static char* config_connection;
 static MYSQL_SYSVAR_STR(bc_connection, config_connection, PLUGIN_VAR_RQCMDARG,
                         "Blockchain connection string", nullptr, nullptr,
                         nullptr);
