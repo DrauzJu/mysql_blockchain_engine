@@ -895,54 +895,6 @@ static SYS_VAR *blockchain_system_variables[] = {
     MYSQL_SYSVAR(signed_longlong_thdvar),
     nullptr};
 
-// this is an example of SHOW_FUNC
-static int show_func_blockchain(MYSQL_THD, SHOW_VAR *var, char *buf) {
-  var->type = SHOW_CHAR;
-  var->value = buf;  // it's of SHOW_VAR_FUNC_BUFF_SIZE bytes
-  snprintf(buf, SHOW_VAR_FUNC_BUFF_SIZE,
-           "enum_var is %lu, ulong_var is %lu, "
-           "double_var is %f, signed_int_var is %d, "
-           "signed_long_var is %ld, signed_longlong_var is %lld",
-           srv_enum_var, srv_ulong_var, srv_double_var, srv_signed_int_var,
-           srv_signed_long_var, srv_signed_longlong_var);
-  return 0;
-}
-
-struct blockchain_vars_t {
-  ulong var1;
-  double var2;
-  char var3[64];
-  bool var4;
-  bool var5;
-  ulong var6;
-};
-
-blockchain_vars_t blockchain_vars = {100, 20.01, "three hundred", true, false, 8250};
-
-static SHOW_VAR show_status_blockchain[] = {
-    {"var1", (char *)&blockchain_vars.var1, SHOW_LONG, SHOW_SCOPE_GLOBAL},
-    {"var2", (char *)&blockchain_vars.var2, SHOW_DOUBLE, SHOW_SCOPE_GLOBAL},
-    {nullptr, nullptr, SHOW_UNDEF,
-     SHOW_SCOPE_UNDEF}  // null terminator required
-};
-
-static SHOW_VAR show_array_blockchain[] = {
-    {"array", (char *)show_status_blockchain, SHOW_ARRAY, SHOW_SCOPE_GLOBAL},
-    {"var3", (char *)&blockchain_vars.var3, SHOW_CHAR, SHOW_SCOPE_GLOBAL},
-    {"var4", (char *)&blockchain_vars.var4, SHOW_BOOL, SHOW_SCOPE_GLOBAL},
-    {nullptr, nullptr, SHOW_UNDEF, SHOW_SCOPE_UNDEF}};
-
-static SHOW_VAR func_status[] = {
-    {"blockchain_func_blockchain", (char *)show_func_blockchain, SHOW_FUNC,
-     SHOW_SCOPE_GLOBAL},
-    {"blockchain_status_var5", (char *)&blockchain_vars.var5, SHOW_BOOL,
-     SHOW_SCOPE_GLOBAL},
-    {"blockchain_status_var6", (char *)&blockchain_vars.var6, SHOW_LONG,
-     SHOW_SCOPE_GLOBAL},
-    {"blockchain_status", (char *)show_array_blockchain, SHOW_ARRAY,
-     SHOW_SCOPE_GLOBAL},
-    {nullptr, nullptr, SHOW_UNDEF, SHOW_SCOPE_UNDEF}};
-
 mysql_declare_plugin(blockchain){
     MYSQL_STORAGE_ENGINE_PLUGIN,
     &blockchain_storage_engine,
@@ -954,7 +906,7 @@ mysql_declare_plugin(blockchain){
     nullptr,           /* Plugin check uninstall */
     nullptr,           /* Plugin Deinit */
     0x0001 /* 0.1 */,
-    func_status,              /* status variables */
+    0,              /* status variables */
     blockchain_system_variables, /* system variables */
     nullptr,                  /* config options */
     0,                        /* flags */
