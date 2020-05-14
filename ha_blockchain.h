@@ -46,6 +46,8 @@
 #include "sql/handler.h" /* handler */
 #include "thr_lock.h"    /* THR_LOCK, THR_LOCK_DATA */
 
+#include "connector.h"
+
 /** @brief
   Blockchain_share is a class that will be shared among all open handlers.
   This blockchain implements the minimum of what you will probably need.
@@ -65,6 +67,7 @@ class ha_blockchain : public handler {
   Blockchain_share *share;        ///< Shared lock info
   Blockchain_share *get_share();  ///< Get the share
   int current_position; // current position during table scan
+  Connector* connector;
 
  public:
   ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg);

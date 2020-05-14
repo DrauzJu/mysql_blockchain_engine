@@ -104,6 +104,8 @@
 #include "mysql/components/services/log_builtins.h"
 #include "sql/field.h"
 
+#include "connector_impl/ethereum.h"
+
 static handler *blockchain_create_handler(handlerton *hton, TABLE_SHARE *table,
                                        bool partitioned, MEM_ROOT *mem_root);
 
@@ -165,7 +167,12 @@ static handler *blockchain_create_handler(handlerton *hton, TABLE_SHARE *table,
 }
 
 ha_blockchain::ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg)
-    : handler(hton, table_arg) {}
+    : handler(hton, table_arg) {
+  switch(config_type) {
+    case 0: connector = new Ethereum(); break;
+    default: std::cout << "Error! Unknown blockchain type" << std::endl;
+  }
+}
 
 /*
   List of all system tables specific to the SE.
