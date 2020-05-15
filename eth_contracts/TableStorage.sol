@@ -24,9 +24,13 @@ contract KVStore {
     public
     {
         Value memory v = Value(block.number,value);
+
+        if(data[key].blocknumber == 0) {
+            keyList.push(key);
+        }
+
         // persist data in blockchain
         data[key] = v;
-        keyList.push(key);
     }
 
     /// Stores multiplie key:value pairs in the storage.
