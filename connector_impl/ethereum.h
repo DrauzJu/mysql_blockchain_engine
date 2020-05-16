@@ -5,6 +5,8 @@
 
 class Ethereum : public Connector {
  public:
+  explicit Ethereum(std::string contractAddress);
+
   int get(TableName table, ByteData* key, unsigned char* buf, int buf_write_index) override;
   int put(TableName table, ByteData* key, ByteData* value) override;
   ByteData *getAllKeys(TableName table) override;

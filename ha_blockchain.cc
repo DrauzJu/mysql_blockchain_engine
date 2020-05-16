@@ -95,6 +95,7 @@
 #include "storage/blockchain/ha_blockchain.h"
 #include <sql/table.h>
 #include <iostream>
+#include <vector>
 
 #include "my_dbug.h"
 #include "mysql/plugin.h"
@@ -114,6 +115,7 @@ handlerton *blockchain_hton;
 // System variables for configuration
 static int config_type;
 static char* config_connection;
+static char* config_eth_contracts;
 
 /* Interface to mysqld, to check system tables supported by SE */
 static bool blockchain_is_supported_system_table(const char *db,
@@ -131,7 +133,11 @@ static int blockchain_init_func(void *p) {
   blockchain_hton->flags = HTON_CAN_RECREATE;
   blockchain_hton->is_supported_system_table = blockchain_is_supported_system_table;
 
-  // todo (JD): Start blockchain node as separate process
+  // Parse configuration
+  if(config_type == ETHEREUM) {
+    ha_blockchain::tableContractInfo =
+        ha_blockchain::parseEthContractConfig(config_eth_contracts);
+  }
 
   return 0;
 }
@@ -166,10 +172,16 @@ static handler *blockchain_create_handler(handlerton *hton, TABLE_SHARE *table,
   return new (mem_root) ha_blockchain(hton, table);
 }
 
+std::unordered_map<TableName, std::string>* ha_blockchain::tableContractInfo =
+    new std::unordered_map<TableName, std::string>();
+
 ha_blockchain::ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg)
     : handler(hton, table_arg) {
   switch(config_type) {
-    case 0: connector = new Ethereum(); break;
+    case 0:
+      connector = new Ethereum(
+          ha_blockchain::tableContractInfo->find(table->alias)->first);
+      break;
     default: std::cout << "Error! Unknown blockchain type" << std::endl;
   }
 }
@@ -454,7 +466,9 @@ int ha_blockchain::rnd_init(bool) {
   // keys = connector->getAllKeys(table->alias);
 
   current_position = -1;
-  tableScanData = connector->tableScan(table->alias);
+  if(tableScanData == nullptr) {
+    tableScanData = connector->tableScan(table->alias);
+  }
 
   DBUG_TRACE;
   return 0;
@@ -462,9 +476,6 @@ int ha_blockchain::rnd_init(bool) {
 
 int ha_blockchain::rnd_end() {
   DBUG_TRACE;
-
-  // todo: clear tableScanData
-
   return 0;
 }
 
@@ -845,20 +856,39 @@ int ha_blockchain::find_row(int index, uchar *buf) {
   return 0;
 }
 
+std::unordered_map<TableName, std::string>* ha_blockchain::parseEthContractConfig(char *config) {
+  auto map = new std::unordered_map<TableName, std::string>();
+  std::string conf(config);
+  std::stringstream ss(conf);
+  std::string entry;
+
+  while (std::getline(ss, entry, ',')) {
+    size_t i = entry.find(':');
+    map->insert({entry.substr(0, i).c_str(), entry.substr(i, std::string::npos)});
+  }
+
+  return map;
+}
+
 struct st_mysql_storage_engine blockchain_storage_engine = {
     MYSQL_HANDLERTON_INTERFACE_VERSION};
 
-static MYSQL_SYSVAR_INT(bc_type_var, config_type, PLUGIN_VAR_RQCMDARG,
+static MYSQL_SYSVAR_INT(bc_type, config_type, PLUGIN_VAR_RQCMDARG,
                         "Blockchain type (0 for Ethereum)", nullptr, nullptr, 0,
                         0, 0, 0);
 
-static MYSQL_SYSVAR_STR(bc_connection, config_connection, PLUGIN_VAR_RQCMDARG,
+static MYSQL_SYSVAR_STR(bc_connection, config_connection, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
                         "Blockchain connection string", nullptr, nullptr,
                         nullptr);
 
+static MYSQL_SYSVAR_STR(bc_eth_contracts, config_eth_contracts, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+                        "Ethereum contract addresses", nullptr, nullptr,
+                        nullptr);
+
 static SYS_VAR *blockchain_system_variables[] = {
-    MYSQL_SYSVAR(bc_type_var), // blockchain type: 0 - ethereum
+    MYSQL_SYSVAR(bc_type), // blockchain type: 0 - ethereum
     MYSQL_SYSVAR(bc_connection), // blockchain connection string (e.g. for Ethereum: http://127.0.0.1:8545)
+    MYSQL_SYSVAR(bc_eth_contracts), // Concept: one contract per table, format: tableName1:contractAddress,tableName2:contractAddress,...
     nullptr
 };
 

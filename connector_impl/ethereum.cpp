@@ -3,6 +3,8 @@
 // todo: implement
 // For document of methods see connector.h
 
+Ethereum::Ethereum(std::string) {}
+
 int Ethereum::get(TableName, ByteData*, unsigned char*, int) {
   return 0;
 }

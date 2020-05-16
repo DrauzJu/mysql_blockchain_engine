@@ -36,7 +36,8 @@ mkdir -p build/lib/plugin
 cp build/plugin_output_directory/ha_blockchain.so build/lib/plugin
 
 build/bin/mysqld --datadir=$(pwd)/test_data_dir --basedir=$(pwd)/build --plugin-load=ha_blockchain.so \
-    --blockchain-bc-type-var=0 --blockchain-bc-connection='http://localhost:8545'
+    --blockchain-bc-type=0 --blockchain-bc-connection='http://localhost:8545' \
+    --blockchain-bc_eth_contracts=tableName:contractAddress,...
 ```
 
 ## MySQL client
