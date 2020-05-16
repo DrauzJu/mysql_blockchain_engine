@@ -77,7 +77,7 @@ class ha_blockchain : public handler {
 
  public:
   // Maps table name to contract address
-  static std::unordered_map<TableName, std::string>* tableContractInfo;
+  static std::unordered_map<std::string, std::string>* tableContractInfo;
 
   ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg);
   ~ha_blockchain() {}
@@ -258,7 +258,7 @@ class ha_blockchain : public handler {
 
   int find_current_row(uchar *buf);
   int find_row(int index, uchar *buf);
-  static std::unordered_map<TableName, std::string>* parseEthContractConfig(char* config);
+  static std::unordered_map<std::string, std::string>* parseEthContractConfig(char* config);
 
   /** @brief
     Unlike index_init(), rnd_init() can be called two consecutive times

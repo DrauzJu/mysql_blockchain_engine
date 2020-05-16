@@ -172,19 +172,11 @@ static handler *blockchain_create_handler(handlerton *hton, TABLE_SHARE *table,
   return new (mem_root) ha_blockchain(hton, table);
 }
 
-std::unordered_map<TableName, std::string>* ha_blockchain::tableContractInfo =
-    new std::unordered_map<TableName, std::string>();
+std::unordered_map<std::string, std::string>* ha_blockchain::tableContractInfo =
+    new std::unordered_map<std::string, std::string>();
 
 ha_blockchain::ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg)
-    : handler(hton, table_arg) {
-  switch(config_type) {
-    case 0:
-      connector = new Ethereum(
-          ha_blockchain::tableContractInfo->find(table->alias)->first);
-      break;
-    default: std::cout << "Error! Unknown blockchain type" << std::endl;
-  }
-}
+    : handler(hton, table_arg) {}
 
 /*
   List of all system tables specific to the SE.
@@ -250,6 +242,21 @@ int ha_blockchain::open(const char *, int, uint, const dd::Table *) {
   std::stringstream msg;
   msg << "Opening table";
   log(msg.str());
+
+  switch(config_type) {
+    case 0: {
+      auto searchAddress = ha_blockchain::tableContractInfo->find(std::string(table->alias));
+      if(searchAddress == ha_blockchain::tableContractInfo->end()) {
+        connector = new Ethereum("");
+      } else {
+        connector = new Ethereum(searchAddress->first);
+      }
+
+      break;
+    }
+
+    default: std::cout << "Error! Unknown blockchain type" << std::endl;
+  }
 
   if (!(share = get_share())) return 1;
   thr_lock_data_init(&share->lock, &lock, nullptr);
@@ -327,7 +334,7 @@ int ha_blockchain::write_row(uchar *) {
 
   @details
   Currently new_data will not have an updated auto_increament record. You can
-  do this for blockchain by doing:
+  do this for example by doing:
 
   @code
 
@@ -856,15 +863,15 @@ int ha_blockchain::find_row(int index, uchar *buf) {
   return 0;
 }
 
-std::unordered_map<TableName, std::string>* ha_blockchain::parseEthContractConfig(char *config) {
-  auto map = new std::unordered_map<TableName, std::string>();
+std::unordered_map<std::string, std::string>* ha_blockchain::parseEthContractConfig(char *config) {
+  auto map = new std::unordered_map<std::string, std::string>();
   std::string conf(config);
   std::stringstream ss(conf);
   std::string entry;
 
   while (std::getline(ss, entry, ',')) {
     size_t i = entry.find(':');
-    map->insert({entry.substr(0, i).c_str(), entry.substr(i, std::string::npos)});
+    map->insert({entry.substr(0, i).c_str(), entry.substr(i+1, std::string::npos)});
   }
 
   return map;
