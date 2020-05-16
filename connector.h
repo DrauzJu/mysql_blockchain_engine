@@ -17,6 +17,11 @@ using TableName = const char*;
 
 class ByteData {
  public:
+  ByteData(unsigned char *p_data, uint8_t p_dataSize) {
+    data = p_data;
+    dataSize = p_dataSize;
+  }
+
   unsigned char *data;
   uint8_t dataSize;
 };
