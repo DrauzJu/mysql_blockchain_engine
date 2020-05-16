@@ -314,15 +314,21 @@ int ha_blockchain::close(void) {
   sql_insert.cc, sql_select.cc, sql_table.cc, sql_udf.cc and sql_update.cc
 */
 
-int ha_blockchain::write_row(uchar *) {
+int ha_blockchain::write_row(uchar *buf) {
   DBUG_TRACE;
-  /*
-    Example of a successful write_row. We don't store the data
-    anywhere; they are thrown away. A real implementation will
-    probably need to do something with 'buf'. We report a success
-    here, to pretend that the insert was successful.
-  */
-  return 0;
+  uint initial_null_bytes = table->s->null_bytes;
+
+  // 1. step: extract key --> first field
+  Field* key_field = *(table->field);
+  uint key_size = key_field->pack_length();
+  ByteData* key = new ByteData(&(buf[initial_null_bytes]), key_size);
+
+  // 2. step: extract values --> other fields
+  ulong value_size = table->s->reclength - key_size - initial_null_bytes;
+  ByteData* value = new ByteData(&(buf[initial_null_bytes + key_size]),
+                                 value_size);
+
+  return connector->put(table->alias, key, value);
 }
 
 /**
