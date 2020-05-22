@@ -247,9 +247,9 @@ int ha_blockchain::open(const char *, int, uint, const dd::Table *) {
     case 0: {
       auto searchAddress = ha_blockchain::tableContractInfo->find(std::string(table->alias));
       if(searchAddress == ha_blockchain::tableContractInfo->end()) {
-        connector = new Ethereum("");
+        connector = new (thd_alloc(ha_thd(), sizeof(Ethereum))) Ethereum("");
       } else {
-        connector = new Ethereum(searchAddress->first);
+        connector = new (thd_alloc(ha_thd(), sizeof(Ethereum))) Ethereum(searchAddress->first);
       }
 
       break;
@@ -896,15 +896,16 @@ ByteData *ha_blockchain::extractKey(uchar *buf) {
   // first field of table is key field
   Field* key_field = *(table->field);
   uint key_size = key_field->pack_length();
-  return new ByteData(&(buf[initial_null_bytes]), key_size);
+  return new (thd_alloc(ha_thd(), sizeof(ByteData)))
+      ByteData(&(buf[initial_null_bytes]), key_size);
 }
 
 ByteData *ha_blockchain::extractValue(uchar *buf, ulong key_size) {
   uint initial_null_bytes = table->s->null_bytes;
 
   ulong value_size = table->s->reclength - key_size - initial_null_bytes;
-  return new ByteData(&(buf[initial_null_bytes + key_size]),
-                            value_size);
+  return new (thd_alloc(ha_thd(), sizeof(ByteData)))
+      ByteData(&(buf[initial_null_bytes + key_size]), value_size);
 }
 
 struct st_mysql_storage_engine blockchain_storage_engine = {
