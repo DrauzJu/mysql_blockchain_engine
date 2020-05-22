@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.7.0;
+pragma solidity ^0.6.8;
 
 /// @author melhindi
 /// @title A key-value storage contract with a batch interface
@@ -48,6 +48,33 @@ contract KVStore {
             data[keys[i]] = v;
             keyList.push(keys[i]);
         }
+    }
+
+    function remove(
+        bytes32 key)
+    public
+    {
+        // remove from keyList: find index, then swap with last element, then call pop()
+        uint size = keyList.length;
+        uint index = type(uint256).max;
+
+        for(uint i=0; i<size; i++) {
+            if(keyList[i] == key) {
+                index = i;
+                break;
+            }
+        }
+
+        if(index == type(uint256).max) {
+            // key not found
+            return;
+        }
+
+        keyList[index] = keyList[size - 1]; // move last element to position of key to delete
+        keyList.pop();
+
+        // delete from data
+        delete data[key];
     }
 
     function tableScan()
