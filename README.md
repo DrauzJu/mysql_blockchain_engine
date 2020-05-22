@@ -4,7 +4,11 @@
 2. Clone this repository in folder `storage/blockchain`
 
 
-# Useful scripts
+# Useful scripts for Ethereum
+
+See folder eth_tools/src
+
+# Useful scripts for MySQL
 
 ## Build (with ninja)
 
