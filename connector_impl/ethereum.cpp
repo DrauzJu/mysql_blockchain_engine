@@ -13,6 +13,10 @@ int Ethereum::put(TableName, ByteData*, ByteData* ) {
   return 0;
 }
 
+int Ethereum::remove(TableName table, ByteData *key) {
+  return 0;
+}
+
 ByteData *Ethereum::getAllKeys(TableName) {
   return nullptr;
 }

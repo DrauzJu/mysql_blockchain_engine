@@ -40,6 +40,11 @@ class Connector {
   virtual int put(TableName table, ByteData* key, ByteData* value) = 0;
 
   /*
+   * returns 0 on success, 1 on failure
+   */
+  virtual int remove(TableName table, ByteData* key) = 0;
+
+  /*
    * returns null-terminated array
    */
   virtual ByteData* getAllKeys(TableName table) = 0;
