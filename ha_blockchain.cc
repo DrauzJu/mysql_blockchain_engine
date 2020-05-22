@@ -172,8 +172,7 @@ static handler *blockchain_create_handler(handlerton *hton, TABLE_SHARE *table,
   return new (mem_root) ha_blockchain(hton, table);
 }
 
-std::unordered_map<std::string, std::string>* ha_blockchain::tableContractInfo =
-    new std::unordered_map<std::string, std::string>();
+std::unordered_map<std::string, std::string>* ha_blockchain::tableContractInfo;
 
 ha_blockchain::ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg)
     : handler(hton, table_arg) {}
