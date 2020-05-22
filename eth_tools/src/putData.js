@@ -17,17 +17,26 @@ const putMethod = kvStore.methods.put(web3.utils.fromAscii("key1"), web3.utils.f
 putMethod.send({
     from: "0xc1c0dCAaF9b9F08fb049561a7DD75bb56121bb9a",   // test account created by Ganache
     gas: Math.pow(10, 6)                            // max. gas to be used
-}).then(() => {
-    tableScan();
+}).then(async () => {
+    await tableScan();
+    await remove();
+    await tableScan();
+    web3.currentProvider.connection.close();
 });
 
-function tableScan() {
+async function tableScan() {
     const tsMethod = kvStore.methods.tableScan();
-    tsMethod.call({
+    const receipt = await tsMethod.call({
         from: web3.eth.defaultAccount
-    }).then((receipt) => {
-        console.log(receipt);
-        web3.currentProvider.connection.close();
+    });
+    console.log(receipt);
+}
+
+async function remove() {
+    const removeMethod = kvStore.methods.remove(web3.utils.fromAscii("key1"));
+    await removeMethod.send({
+        from: "0xc1c0dCAaF9b9F08fb049561a7DD75bb56121bb9a",   // test account created by Ganache
+        gas: Math.pow(10, 6)                            // max. gas to be used
     });
 }
 
