@@ -48,16 +48,6 @@
 
 #include "connector.h"
 
-/** @brief
-  Blockchain_share is a class that will be shared among all open handlers.
-  This blockchain implements the minimum of what you will probably need.
-*/
-class Blockchain_share : public Handler_share {
- public:
-  THR_LOCK lock;
-  Blockchain_share();
-  ~Blockchain_share() { thr_lock_delete(&lock); }
-};
 
 enum BC_TYPE {
   ETHEREUM = 0
@@ -67,20 +57,17 @@ enum BC_TYPE {
   Class definition for the storage engine
 */
 class ha_blockchain : public handler {
-  THR_LOCK_DATA lock;          ///< MySQL lock
-  Blockchain_share *share;        ///< Shared lock info
-  Blockchain_share *get_share();  ///< Get the share
   int current_position; // current position during table scan
-  Connector* connector;
-  ByteData* keys;
-  ByteData* tableScanData;
+  std::unique_ptr<Connector> connector;
+  std::vector<ByteData> tableScanData;
+  bool tableScanDataDeleteFlag = false;
 
  public:
   // Maps table name to contract address
   static std::unordered_map<std::string, std::string>* tableContractInfo;
 
   ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg);
-  ~ha_blockchain() {}
+  ~ha_blockchain();
 
   /** @brief
     The name that will be used for display purposes.
@@ -254,13 +241,17 @@ class ha_blockchain : public handler {
   /** @brief
    * Logging helper
    */
-   void log(std::string msg);
+   void log(const std::string& msg);
 
   int find_current_row(uchar *buf);
   int find_row(int index, uchar *buf);
+
+  void invalidateTableScanData();
+
+  void extractKey(uchar* buf, ByteData* key);
+  void extractValue(uchar* buf, ulong key_size, ByteData* value);
+
   static std::unordered_map<std::string, std::string>* parseEthContractConfig(char* config);
-  ByteData* extractKey(uchar* buf);
-  ByteData* extractValue(uchar* buf, ulong key_size);
 
   /** @brief
     Unlike index_init(), rnd_init() can be called two consecutive times

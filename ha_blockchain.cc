@@ -122,8 +122,6 @@ static bool blockchain_is_supported_system_table(const char *db,
                                               const char *table_name,
                                               bool is_sql_layer_system_table);
 
-Blockchain_share::Blockchain_share() { thr_lock_init(&lock); }
-
 static int blockchain_init_func(void *p) {
   DBUG_TRACE;
 
@@ -142,31 +140,6 @@ static int blockchain_init_func(void *p) {
   return 0;
 }
 
-/**
-  @brief
-  Example of simple lock controls. The "share" it creates is a
-  structure we will pass to each blockchain handler. Do you have to have
-  one of these? Well, you have pieces that are used for locking, and
-  they are needed to function.
-*/
-
-Blockchain_share *ha_blockchain::get_share() {
-  Blockchain_share *tmp_share;
-
-  DBUG_TRACE;
-
-  lock_shared_ha_data();
-  if (!(tmp_share = static_cast<Blockchain_share *>(get_ha_share_ptr()))) {
-    tmp_share = new Blockchain_share;
-    if (!tmp_share) goto err;
-
-    set_ha_share_ptr(static_cast<Handler_share *>(tmp_share));
-  }
-err:
-  unlock_shared_ha_data();
-  return tmp_share;
-}
-
 static handler *blockchain_create_handler(handlerton *hton, TABLE_SHARE *table,
                                        bool, MEM_ROOT *mem_root) {
   return new (mem_root) ha_blockchain(hton, table);
@@ -176,6 +149,11 @@ std::unordered_map<std::string, std::string>* ha_blockchain::tableContractInfo;
 
 ha_blockchain::ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg)
     : handler(hton, table_arg) {}
+
+ha_blockchain::~ha_blockchain() {
+  // connector: use of smart pointer
+  // tableScanData: gets deconstructed by std::vector
+}
 
 /*
   List of all system tables specific to the SE.
@@ -246,9 +224,9 @@ int ha_blockchain::open(const char *, int, uint, const dd::Table *) {
     case 0: {
       auto searchAddress = ha_blockchain::tableContractInfo->find(std::string(table->alias));
       if(searchAddress == ha_blockchain::tableContractInfo->end()) {
-        connector = new (thd_alloc(ha_thd(), sizeof(Ethereum))) Ethereum("");
+        connector = std::unique_ptr<Connector>(new Ethereum(""));
       } else {
-        connector = new (thd_alloc(ha_thd(), sizeof(Ethereum))) Ethereum(searchAddress->first);
+        connector = std::unique_ptr<Connector>(new Ethereum(searchAddress->first));
       }
 
       break;
@@ -256,9 +234,6 @@ int ha_blockchain::open(const char *, int, uint, const dd::Table *) {
 
     default: std::cout << "Error! Unknown blockchain type" << std::endl;
   }
-
-  if (!(share = get_share())) return 1;
-  thr_lock_data_init(&share->lock, &lock, nullptr);
 
   return 0;
 }
@@ -315,11 +290,13 @@ int ha_blockchain::close(void) {
 
 int ha_blockchain::write_row(uchar *buf) {
   DBUG_TRACE;
+  invalidateTableScanData();
 
-  auto key = extractKey(buf);
-  auto value = extractValue(buf, key->dataSize);
+  ByteData key, value;
+  extractKey(buf, &key);
+  extractValue(buf, key.dataSize, &value);
 
-  return connector->put(table->alias, key, value);
+  return connector->put(table->alias, &key, &value);
 }
 
 /**
@@ -348,12 +325,13 @@ int ha_blockchain::write_row(uchar *buf) {
 int ha_blockchain::update_row(const uchar *old_data, uchar *new_data) {
   DBUG_TRACE;
 
-  auto key_old = extractKey(const_cast<uchar *>(old_data));
-  auto key_new = extractKey(new_data);
+  ByteData key_old, key_new;
+  extractKey(const_cast<uchar *>(old_data), &key_old);
+  extractKey(new_data, &key_new);
 
   // Check if keys are still the same
-  if(key_old->dataSize == key_new->dataSize) {
-    if(memcmp(key_old->data, key_new->data, key_old->dataSize) != 0) {
+  if(key_old.dataSize == key_new.dataSize) {
+    if(memcmp(key_old.data, key_new.data, key_old.dataSize) != 0) {
       return HA_ERR_WRONG_COMMAND; // key content is different
     }
   } else {
@@ -385,9 +363,11 @@ int ha_blockchain::update_row(const uchar *old_data, uchar *new_data) {
 
 int ha_blockchain::delete_row(const uchar *buf) {
   DBUG_TRACE;
+  ByteData key;
 
-  auto key = extractKey(const_cast<uchar *>(buf));
-  return connector->remove(table->alias, key);
+  invalidateTableScanData();
+  extractKey(const_cast<uchar *>(buf), &key);
+  return connector->remove(table->alias, &key);
 }
 
 /**
@@ -485,9 +465,11 @@ int ha_blockchain::rnd_init(bool) {
   // keys = connector->getAllKeys(table->alias);
 
   current_position = -1;
-  if(tableScanData == nullptr) {
-    tableScanData = connector->tableScan(table->alias);
+  if(tableScanData.empty()) {
+    connector->tableScan(table->alias, tableScanData);
   }
+
+  tableScanDataDeleteFlag = false;
 
   DBUG_TRACE;
   return 0;
@@ -495,6 +477,11 @@ int ha_blockchain::rnd_init(bool) {
 
 int ha_blockchain::rnd_end() {
   DBUG_TRACE;
+
+  if(tableScanDataDeleteFlag) {
+    tableScanData.clear();
+  }
+
   return 0;
 }
 
@@ -710,10 +697,7 @@ int ha_blockchain::external_lock(THD *, int) {
   get_lock_data() in lock.cc
 */
 THR_LOCK_DATA **ha_blockchain::store_lock(THD *, THR_LOCK_DATA **to,
-                                       enum thr_lock_type lock_type) {
-  if (lock_type != TL_IGNORE && lock.type == TL_UNLOCK) lock.type = lock_type;
-  *to++ = &lock;
-
+                                       enum thr_lock_type) {
   // Blockchain: ignore all locks --> global order determined by blockchain
   // (*to)->type = TL_IGNORE;
 
@@ -838,7 +822,7 @@ int ha_blockchain::create(const char *name, TABLE *, HA_CREATE_INFO *,
   return 0;
 }
 
-void ha_blockchain::log(std::string msg) {
+void ha_blockchain::log(const std::string& msg) {
   std::cout << "[BLOCKCHAIN - " << table->alias << "] " << msg << std::endl;
 }
 
@@ -859,9 +843,10 @@ int ha_blockchain::find_row(int index, uchar *buf) {
 
   // --------------------------------------------
 
-  ByteData* data = &(tableScanData[index]);
-
-  if(data == nullptr) {
+  ByteData data;
+  try {
+    data = tableScanData.at(index);
+  } catch (const std::out_of_range&) {
     return HA_ERR_END_OF_FILE;
   }
 
@@ -871,7 +856,7 @@ int ha_blockchain::find_row(int index, uchar *buf) {
   uint pos = initial_null_bytes;
 
   // Copy data
-  memcpy(&(buf[pos]), data->data, data->dataSize);
+  memcpy(&(buf[pos]), data.data, data.dataSize);
   return 0;
 }
 
@@ -889,22 +874,26 @@ std::unordered_map<std::string, std::string>* ha_blockchain::parseEthContractCon
   return map;
 }
 
-ByteData *ha_blockchain::extractKey(uchar *buf) {
+void ha_blockchain::extractKey(uchar *buf, ByteData* key) {
   uint initial_null_bytes = table->s->null_bytes;
 
   // first field of table is key field
   Field* key_field = *(table->field);
-  uint key_size = key_field->pack_length();
-  return new (thd_alloc(ha_thd(), sizeof(ByteData)))
-      ByteData(&(buf[initial_null_bytes]), key_size);
+
+  key->data = &(buf[initial_null_bytes]);
+  key->dataSize = key_field->pack_length();
 }
 
-ByteData *ha_blockchain::extractValue(uchar *buf, ulong key_size) {
+void ha_blockchain::extractValue(uchar *buf, ulong key_size, ByteData* value) {
   uint initial_null_bytes = table->s->null_bytes;
 
-  ulong value_size = table->s->reclength - key_size - initial_null_bytes;
-  return new (thd_alloc(ha_thd(), sizeof(ByteData)))
-      ByteData(&(buf[initial_null_bytes + key_size]), value_size);
+  value->data = &(buf[initial_null_bytes + key_size]);
+  value->dataSize = table->s->reclength - key_size - initial_null_bytes;
+}
+
+// don't just delete tableScanData, might be still in use during a
+void ha_blockchain::invalidateTableScanData()  {
+  tableScanDataDeleteFlag = true;
 }
 
 struct st_mysql_storage_engine blockchain_storage_engine = {

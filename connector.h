@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <vector>
 
 /*
  * Interface definition to be used by storage engine to communicate with
@@ -17,10 +18,12 @@ using TableName = const char*;
 
 class ByteData {
  public:
+  ByteData() {}
   ByteData(unsigned char *p_data, uint8_t p_dataSize) {
     data = p_data;
     dataSize = p_dataSize;
   }
+  ~ByteData() {}
 
   unsigned char *data;
   uint8_t dataSize;
@@ -28,6 +31,8 @@ class ByteData {
 
 class Connector {
  public:
+  virtual ~Connector() {}
+
   /*
    * Write single KV-pair (concatenated) into byte buffer buf, starting at buf_write_index
    *
@@ -45,15 +50,10 @@ class Connector {
   virtual int remove(TableName table, ByteData* key) = 0;
 
   /*
-   * returns null-terminated array
-   */
-  virtual ByteData* getAllKeys(TableName table) = 0;
-
-  /*
-   * Do a table scan, returns null-terminated array of key+values
+   * Do a table scan, puts tuples in provided vector object (key+value concatenated)
    * --> faster than getting each KV-pair in an own transaction
    */
-  virtual ByteData* tableScan(TableName table) = 0;
+  virtual void tableScan(TableName table, std::vector<ByteData> tuples) = 0;
 };
 
 #endif  // MYSQL_8_0_20_CONNECTOR_H

@@ -3,7 +3,9 @@
 // todo: implement
 // For document of methods see connector.h
 
-Ethereum::Ethereum(std::string) {}
+Ethereum::Ethereum(const std::string&) {}
+
+Ethereum::~Ethereum() = default;
 
 int Ethereum::get(TableName, ByteData*, unsigned char*, int) {
   return 0;
@@ -17,10 +19,4 @@ int Ethereum::remove(TableName, ByteData *) {
   return 0;
 }
 
-ByteData *Ethereum::getAllKeys(TableName) {
-  return nullptr;
-}
-
-ByteData *Ethereum::tableScan(TableName) {
-  return nullptr;
-}
+void Ethereum::tableScan(TableName, std::vector<ByteData>) {}

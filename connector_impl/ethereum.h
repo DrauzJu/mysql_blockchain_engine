@@ -5,13 +5,13 @@
 
 class Ethereum : public Connector {
  public:
-  explicit Ethereum(std::string contractAddress);
+  explicit Ethereum(const std::string& contractAddress);
+  ~Ethereum() override;
 
   int get(TableName table, ByteData* key, unsigned char* buf, int buf_write_index) override;
   int put(TableName table, ByteData* key, ByteData* value) override;
   int remove(TableName table, ByteData *key) override;
-  ByteData *getAllKeys(TableName table) override;
-  ByteData *tableScan(TableName table) override;
+  void tableScan(TableName table, std::vector<ByteData> tuples) override;
 };
 
 #endif  // MYSQL_8_0_20_ETHEREUM_H
