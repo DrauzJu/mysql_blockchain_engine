@@ -13,7 +13,7 @@ int Ethereum::put(TableName, ByteData*, ByteData* ) {
   return 0;
 }
 
-int Ethereum::remove(TableName table, ByteData *key) {
+int Ethereum::remove(TableName, ByteData *) {
   return 0;
 }
 

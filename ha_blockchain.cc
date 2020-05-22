@@ -316,17 +316,9 @@ int ha_blockchain::close(void) {
 
 int ha_blockchain::write_row(uchar *buf) {
   DBUG_TRACE;
-  uint initial_null_bytes = table->s->null_bytes;
 
-  // 1. step: extract key --> first field
-  Field* key_field = *(table->field);
-  uint key_size = key_field->pack_length();
-  ByteData* key = new ByteData(&(buf[initial_null_bytes]), key_size);
-
-  // 2. step: extract values --> other fields
-  ulong value_size = table->s->reclength - key_size - initial_null_bytes;
-  ByteData* value = new ByteData(&(buf[initial_null_bytes + key_size]),
-                                 value_size);
+  auto key = extractKey(buf);
+  auto value = extractValue(buf, key->dataSize);
 
   return connector->put(table->alias, key, value);
 }
@@ -354,9 +346,22 @@ int ha_blockchain::write_row(uchar *buf) {
   @see
   sql_select.cc, sql_acl.cc, sql_update.cc and sql_insert.cc
 */
-int ha_blockchain::update_row(const uchar *, uchar *) {
+int ha_blockchain::update_row(const uchar *old_data, uchar *new_data) {
   DBUG_TRACE;
-  return HA_ERR_WRONG_COMMAND;
+
+  auto key_old = extractKey(const_cast<uchar *>(old_data));
+  auto key_new = extractKey(new_data);
+
+  // Check if keys are still the same
+  if(key_old->dataSize == key_new->dataSize) {
+    if(memcmp(key_old->data, key_new->data, key_old->dataSize) != 0) {
+      return HA_ERR_WRONG_COMMAND; // key content is different
+    }
+  } else {
+    return HA_ERR_WRONG_COMMAND; // key size is different
+  }
+
+  return write_row(new_data);
 }
 
 /**
@@ -881,6 +886,23 @@ std::unordered_map<std::string, std::string>* ha_blockchain::parseEthContractCon
   }
 
   return map;
+}
+
+ByteData *ha_blockchain::extractKey(uchar *buf) {
+  uint initial_null_bytes = table->s->null_bytes;
+
+  // first field of table is key field
+  Field* key_field = *(table->field);
+  uint key_size = key_field->pack_length();
+  return new ByteData(&(buf[initial_null_bytes]), key_size);
+}
+
+ByteData *ha_blockchain::extractValue(uchar *buf, ulong key_size) {
+  uint initial_null_bytes = table->s->null_bytes;
+
+  ulong value_size = table->s->reclength - key_size - initial_null_bytes;
+  return new ByteData(&(buf[initial_null_bytes + key_size]),
+                            value_size);
 }
 
 struct st_mysql_storage_engine blockchain_storage_engine = {

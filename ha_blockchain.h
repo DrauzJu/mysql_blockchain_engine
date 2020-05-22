@@ -259,6 +259,8 @@ class ha_blockchain : public handler {
   int find_current_row(uchar *buf);
   int find_row(int index, uchar *buf);
   static std::unordered_map<std::string, std::string>* parseEthContractConfig(char* config);
+  ByteData* extractKey(uchar* buf);
+  ByteData* extractValue(uchar* buf, ulong key_size);
 
   /** @brief
     Unlike index_init(), rnd_init() can be called two consecutive times
