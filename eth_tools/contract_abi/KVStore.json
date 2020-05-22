@@ -2,7 +2,6 @@
   "contractName": "KVStore",
   "abi": [
     {
-      "constant": false,
       "inputs": [
         {
           "internalType": "bytes32",
@@ -17,12 +16,10 @@
       ],
       "name": "put",
       "outputs": [],
-      "payable": false,
       "stateMutability": "nonpayable",
       "type": "function"
     },
     {
-      "constant": false,
       "inputs": [
         {
           "internalType": "bytes32[]",
@@ -37,12 +34,23 @@
       ],
       "name": "putBatch",
       "outputs": [],
-      "payable": false,
       "stateMutability": "nonpayable",
       "type": "function"
     },
     {
-      "constant": true,
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "name": "remove",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
       "inputs": [],
       "name": "tableScan",
       "outputs": [
@@ -57,12 +65,11 @@
           "type": "bytes32[]"
         }
       ],
-      "payable": false,
       "stateMutability": "view",
-      "type": "function"
+      "type": "function",
+      "constant": true
     },
     {
-      "constant": true,
       "inputs": [
         {
           "internalType": "bytes32",
@@ -83,12 +90,11 @@
           "type": "uint256"
         }
       ],
-      "payable": false,
       "stateMutability": "view",
-      "type": "function"
+      "type": "function",
+      "constant": true
     },
     {
-      "constant": true,
       "inputs": [
         {
           "internalType": "bytes32[]",
@@ -109,9 +115,9 @@
           "type": "uint256[]"
         }
       ],
-      "payable": false,
       "stateMutability": "view",
-      "type": "function"
+      "type": "function",
+      "constant": true
     }
   ]
 }

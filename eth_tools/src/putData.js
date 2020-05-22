@@ -10,7 +10,7 @@ const contractFile = fs.readFileSync("contract_abi/KVStore.json", "utf-8");
 const abi = JSON.parse(contractFile).abi;
 
 // 2. Get "put" method object
-const kvStore = new web3.eth.Contract(abi, "0x844698BAE12D253C9682C2FBAf1C1cD8A7607565");
+const kvStore = new web3.eth.Contract(abi, "0x8285fa89Cd178361076CecBd4314B6e945a76F8B");
 const putMethod = kvStore.methods.put(web3.utils.fromAscii("key1"), web3.utils.fromAscii("value1"));
 
 // 3. Call "put" method
