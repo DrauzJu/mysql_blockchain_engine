@@ -384,9 +384,11 @@ int ha_blockchain::update_row(const uchar *old_data, uchar *new_data) {
   sql_acl.cc, sql_udf.cc, sql_delete.cc, sql_insert.cc and sql_select.cc
 */
 
-int ha_blockchain::delete_row(const uchar *) {
+int ha_blockchain::delete_row(const uchar *buf) {
   DBUG_TRACE;
-  return HA_ERR_WRONG_COMMAND;
+
+  auto key = extractKey(const_cast<uchar *>(buf));
+  return connector->remove(table->alias, key);
 }
 
 /**
@@ -741,7 +743,7 @@ THR_LOCK_DATA **ha_blockchain::store_lock(THD *, THR_LOCK_DATA **to,
 int ha_blockchain::delete_table(const char *, const dd::Table *) {
   DBUG_TRACE;
   /* This is not implemented but we want someone to be able that it works. */
-  return 0;
+  return HA_ERR_WRONG_COMMAND; // todo: implement
 }
 
 /**
@@ -761,7 +763,7 @@ int ha_blockchain::delete_table(const char *, const dd::Table *) {
 int ha_blockchain::rename_table(const char *, const char *, const dd::Table *,
                              dd::Table *) {
   DBUG_TRACE;
-  return HA_ERR_WRONG_COMMAND;
+  return HA_ERR_WRONG_COMMAND; // todo: implement
 }
 
 /**
