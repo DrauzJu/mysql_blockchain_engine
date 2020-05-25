@@ -21,6 +21,10 @@ cd build
 cmake -DCMAKE_BUILD_TYPE=Debug -GNinja -DWITH_BOOST=BOOST_PATH_HERE ..
 ninja
 ```
+or with cURL (libcurl4-openssl-dev):
+```bash
+cmake -DCMAKE_BUILD_TYPE=Debug -GNinja -DWITH_BOOST=BOOST_PATH_HERE -DWITH_CURL=/usr/include/x86_64-linux-gnu/ -DCMAKE_CXX_STANDARD_LIBRARIES="-lcurl"
+```
 
 ## Initial setup
 
