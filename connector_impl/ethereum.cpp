@@ -29,6 +29,25 @@ static std::vector<std::string> Split(const std::string& str, int splitLength)
     return ret;
 }
 
+static std::string hexToASCII(std::string hex)
+{
+    // initialize the ASCII code string as empty.
+    std::string ascii = "";
+    for (size_t i = 0; i < hex.length(); i += 2)
+    {
+        // extract two characters from hex string
+        std::string part = hex.substr(i, 2);
+
+        // change it into base 16 and
+        // typecast as the character
+        char ch = stoul(part, nullptr, 16);
+
+        // add this char to final ASCII string
+        ascii += ch;
+    }
+    return ascii;
+}
+
 
 Ethereum::Ethereum(const std::string&) {}
 
@@ -75,10 +94,20 @@ void Ethereum::tableScan(TableName, std::vector<ByteData> &tuples) {
             ss >> count;
 
             for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
+
                 int valueIndex = i+count+1;
-                std::cout << i << ": " << results[i] << " - " << valueIndex << ": " << results[valueIndex] << std::endl;
-                unsigned char* r = reinterpret_cast<unsigned char*>(const_cast<char*>(results[valueIndex].c_str()));
-                ByteData bd = ByteData(r, strlen(results[valueIndex].c_str()));
+
+                std::string key = hexToASCII(results[i]);
+                std::string value = hexToASCII(results[valueIndex]);
+
+                std::cout << i << ": " << key << " - " << valueIndex << ": " << value << std::endl;
+
+                std::string rowStr = results[i] + results[valueIndex];
+                unsigned char* row = new unsigned char[128];
+                memcpy(row, rowStr.c_str(), 128);
+                row[rowStr.size()]=0;
+
+                ByteData bd = ByteData(row, 128);
                 tuples.push_back(bd);
             }
 
