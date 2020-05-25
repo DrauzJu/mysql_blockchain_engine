@@ -53,7 +53,7 @@ class Connector {
    * Do a table scan, puts tuples in provided vector object (key+value concatenated)
    * --> faster than getting each KV-pair in an own transaction
    */
-  virtual void tableScan(TableName table, std::vector<ByteData> tuples) = 0;
+  virtual void tableScan(TableName table, std::vector<ByteData> &tuples) = 0;
 };
 
 #endif  // MYSQL_8_0_20_CONNECTOR_H

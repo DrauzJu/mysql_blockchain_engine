@@ -1,6 +1,11 @@
 #ifndef MYSQL_8_0_20_ETHEREUM_H
 #define MYSQL_8_0_20_ETHEREUM_H
 
+#include <iostream>
+#include <string>
+#include <regex>
+#include <curl/curl.h>
+
 #include "../connector.h"
 
 class Ethereum : public Connector {
@@ -11,7 +16,7 @@ class Ethereum : public Connector {
   int get(TableName table, ByteData* key, unsigned char* buf, int buf_write_index) override;
   int put(TableName table, ByteData* key, ByteData* value) override;
   int remove(TableName table, ByteData *key) override;
-  void tableScan(TableName table, std::vector<ByteData> tuples) override;
+  void tableScan(TableName table, std::vector<ByteData> &tuples) override;
 };
 
 #endif  // MYSQL_8_0_20_ETHEREUM_H
