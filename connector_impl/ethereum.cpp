@@ -94,15 +94,6 @@ void Ethereum::tableScan(TableName, std::vector<ByteData> &tuples, size_t keyLen
 
                 int valueIndex = i+count+1;
 
-                /*std::string key = hexToASCII(results[i]);
-                std::string value = hexToASCII(results[valueIndex]);
-
-                std::cout << i << ": " << key << " - " << valueIndex << ": " << value << std::endl;
-
-                std::string rowStr = key + value;
-                unsigned char* row = new unsigned char[64];
-                memcpy(row, rowStr.c_str(), 64);*/
-
                 uint8_t key[32]; // 32 byte value
                 parse32ByteHexString(results[i], key);
 
