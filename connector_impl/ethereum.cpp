@@ -75,7 +75,7 @@ void Ethereum::tableScan(TableName, std::vector<ByteData> &tuples) {
         curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8545");
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"jsonrpc\":\"2.0\",\"method\":\"eth_call\",\"params\":[{\"data\":\"0xb3055e26\",\"to\":\"0xBBFdd8bf1C5587F1ad262f63894D5FE60F2c2c38\"}, \"latest\"],\"id\":1}");
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"jsonrpc\":\"2.0\",\"method\":\"eth_call\",\"params\":[{\"data\":\"0xb3055e26\",\"to\":\"0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A\"}, \"latest\"],\"id\":1}");
         /*res = */curl_easy_perform(curl);
         curl_easy_cleanup(curl);
 
@@ -102,12 +102,11 @@ void Ethereum::tableScan(TableName, std::vector<ByteData> &tuples) {
 
                 std::cout << i << ": " << key << " - " << valueIndex << ": " << value << std::endl;
 
-                std::string rowStr = results[i] + results[valueIndex];
-                unsigned char* row = new unsigned char[128];
-                memcpy(row, rowStr.c_str(), 128);
-                row[rowStr.size()]=0;
+                std::string rowStr = key + value;
+                unsigned char* row = new unsigned char[64];
+                memcpy(row, rowStr.c_str(), 64);
 
-                ByteData bd = ByteData(row, 128);
+                ByteData bd = ByteData(row, 64);
                 tuples.push_back(bd);
             }
 
