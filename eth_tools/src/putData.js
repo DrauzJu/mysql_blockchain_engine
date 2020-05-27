@@ -2,41 +2,56 @@
 const Web3 = require('web3');
 const fs = require('fs');
 
+const CONTRACT_ADDRESS="0xdf068eBa03a86cA0093df0EC7d6C28eeB5BB425E";
+const FROM_ACCOUNT="0xAb81353220deccf2e8f931533ebAEBd9348dD615";
+
 // Connect to Ethereum node
 const web3 = new Web3('ws://localhost:8545');
 
 // 1. Load ABI of contract to call
 const contractFile = fs.readFileSync("contract_abi/KVStore.json", "utf-8");
 const abi = JSON.parse(contractFile).abi;
+const kvStore = new web3.eth.Contract(abi, CONTRACT_ADDRESS);
 
-// 2. Get "put" method object
-const kvStore = new web3.eth.Contract(abi, "0x8285fa89Cd178361076CecBd4314B6e945a76F8B");
-const putMethod = kvStore.methods.put(web3.utils.fromAscii("key1"), web3.utils.fromAscii("value1"));
-
-// 3. Call "put" method
-putMethod.send({
-    from: "0xc1c0dCAaF9b9F08fb049561a7DD75bb56121bb9a",   // test account created by Ganache
-    gas: Math.pow(10, 6)                            // max. gas to be used
-}).then(async () => {
-    await tableScan();
-    await remove();
-    await tableScan();
-    web3.currentProvider.connection.close();
-});
+async function put(key, value) {
+    const putMethod = kvStore.methods.put(key, value);
+    await putMethod.send({
+        from: FROM_ACCOUNT,
+        gas: Math.pow(10, 6)
+    });
+}
 
 async function tableScan() {
     const tsMethod = kvStore.methods.tableScan();
     const receipt = await tsMethod.call({
-        from: web3.eth.defaultAccount
+        from: FROM_ACCOUNT
     });
+
     console.log(receipt);
 }
 
-async function remove() {
-    const removeMethod = kvStore.methods.remove(web3.utils.fromAscii("key1"));
+async function remove(key) {
+    const removeMethod = kvStore.methods.remove(key);
     await removeMethod.send({
-        from: "0xc1c0dCAaF9b9F08fb049561a7DD75bb56121bb9a",   // test account created by Ganache
-        gas: Math.pow(10, 6)                            // max. gas to be used
+        from: FROM_ACCOUNT,
+        gas: Math.pow(10, 6)
     });
 }
 
+async function run() {
+    // await put(web3.utils.fromDecimal(1), web3.utils.fromDecimal(2));
+    // await put(web3.utils.fromAscii("Key1"), web3.utils.fromAscii("value1"));
+    await put(web3.utils.fromDecimal(10), web3.utils.fromAscii("Val1"));
+
+    // await tableScan();
+
+    // await remove(web3.utils.fromAscii("Key1"));
+    // await remove(web3.utils.fromDecimal(6));
+    // await remove(web3.utils.fromDecimal(7));
+
+    await tableScan();
+
+    web3.currentProvider.connection.close();
+}
+
+run().then(() => console.log("Done"));
