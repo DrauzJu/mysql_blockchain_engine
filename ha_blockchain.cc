@@ -767,12 +767,6 @@ ha_rows ha_blockchain::records_in_range(uint, key_range *, key_range *) {
   return 10;  // low number to force index usage
 }
 
-static MYSQL_THDVAR_STR(last_create_thdvar, PLUGIN_VAR_MEMALLOC, nullptr,
-                        nullptr, nullptr, nullptr);
-
-static MYSQL_THDVAR_UINT(create_count_thdvar, 0, nullptr, nullptr, nullptr, 0,
-                         0, 1000, 0);
-
 /**
   @brief
   create() is called to create a database. The variable name will have the name
@@ -795,29 +789,10 @@ static MYSQL_THDVAR_UINT(create_count_thdvar, 0, nullptr, nullptr, nullptr, 0,
 int ha_blockchain::create(const char *name, TABLE *, HA_CREATE_INFO *,
                        dd::Table *) {
   DBUG_TRACE;
-  /*
-    This is not implemented but we want someone to be able to see that it
-    works.
-  */
 
   std::stringstream logMsg;
   logMsg << "Creating new table: " << name << std::endl;
   log(logMsg.str());
-
-  // LogErr(SYSTEM_LEVEL, ER_LOG_PRINTF_MSG, logMsg.str());
-
-  /*
-    It's just an example of THDVAR_SET() usage below.
-  */
-  THD *thd = ha_thd();
-  char *buf = (char *)my_malloc(PSI_NOT_INSTRUMENTED, SHOW_VAR_FUNC_BUFF_SIZE,
-                                MYF(MY_FAE));
-  snprintf(buf, SHOW_VAR_FUNC_BUFF_SIZE, "Last creation '%s'", name);
-  THDVAR_SET(thd, last_create_thdvar, buf);
-  my_free(buf);
-
-  uint count = THDVAR(thd, create_count_thdvar) + 1;
-  THDVAR_SET(thd, create_count_thdvar, &count);
 
   return 0;
 }
