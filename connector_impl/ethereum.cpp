@@ -11,9 +11,9 @@ struct RPCparams {
     std::string method;
     std::string gas;
     std::string gasPrice;
-    std::string latest;
+    std::string quantity_tag;
     int id;
-    RPCparams() : latest("latest"), id(1) {}
+    RPCparams() : id(1) {}
 };
 
 static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
@@ -79,8 +79,8 @@ static std::string call(RPCparams params) {
     std::string readBuffer;
 
     const std::string json = parseParamsToJson(params);
-    const std::string latest = params.latest.empty() ? "" : ",\"" + params.latest + "\"";
-    const std::string postData = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(params.id) + ",\"method\":\"" + params.method + "\",\"params\":[{" + json + "}" + latest + "]}";
+    const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";
+    const std::string postData = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(params.id) + ",\"method\":\"" + params.method + "\",\"params\":[{" + json + "}" + quantity_tag + "]}";
     std::cout << postData << std::endl;
 
     curl = curl_easy_init();
@@ -117,21 +117,16 @@ int Ethereum::get(TableName, ByteData*, unsigned char*, int) {
 
 int Ethereum::put(TableName, ByteData*, ByteData* ) {
 
-    /*CURL *curl;
-    //CURLcode res;
-    std::string readBuffer;
+    RPCparams params;
+    params.method = "eth_sendTransaction";
+    params.data = "0x4c6670800a0000000000000000000000000000000000000000000000000000000000000056616c3100000000000000000000000000000000000000000000000000000000";
+    params.from = "0x26B5A7711383EB82EC3f72DFBc007491a920D054";
+    params.to = "0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A";
+    params.gas = "0xf4240";
+    params.gasPrice = "0x4a817c800";
 
-    curl = curl_easy_init();
-    if(curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8545");
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"eth_sendTransaction\",\"params\":[{\"from\":\"0xe85df01aacc72bc97fa9586c1202dc5eb218031c\",\"gas\":\"0xf4240\",\"data\":\"0x4c6670800a0000000000000000000000000000000000000000000000000000000000000056616c3100000000000000000000000000000000000000000000000000000000\",\"gasPrice\":\"0x4a817c800\",\"to\":\"0xecd60d97e8320ce39f63f2d5f50c8569dbb4c03a\"}]}");
-        *//*res = *//*curl_easy_perform(curl);
-        curl_easy_cleanup(curl);
-
-        std::cout << readBuffer << std::endl;
-    } else std::cout << "no curl" << std::endl;*/
+    const std::string s = call(params);
+    std::cout << s << std::endl;
 
     return 0;
 }
@@ -146,6 +141,7 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
     params.method = "eth_call";
     params.data = "0xb3055e26";
     params.to = "0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A";
+    params.quantity_tag = "latest";
 
 
     std::regex rgx(".*\"result\":\"0x(\\w+)\".*");

@@ -2,8 +2,8 @@
 const Web3 = require('web3');
 const fs = require('fs');
 
-const CONTRACT_ADDRESS="0xdf068eBa03a86cA0093df0EC7d6C28eeB5BB425E";
-const FROM_ACCOUNT="0xAb81353220deccf2e8f931533ebAEBd9348dD615";
+const CONTRACT_ADDRESS="0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A";
+const FROM_ACCOUNT="0x26B5A7711383EB82EC3f72DFBc007491a920D054";
 
 // Connect to Ethereum node
 const web3 = new Web3('ws://localhost:8545');
@@ -40,13 +40,13 @@ async function remove(key) {
 
 async function run() {
     // await put(web3.utils.fromDecimal(1), web3.utils.fromDecimal(2));
-    // await put(web3.utils.fromAscii("Key1"), web3.utils.fromAscii("value1"));
-    await put(web3.utils.fromDecimal(10), web3.utils.fromAscii("Val1"));
+     await put(web3.utils.fromAscii("Key1"), web3.utils.fromAscii("value1"));
+    //await put(web3.utils.fromDecimal(10), web3.utils.fromAscii("Val1"));
 
     // await tableScan();
 
     // await remove(web3.utils.fromAscii("Key1"));
-    // await remove(web3.utils.fromDecimal(6));
+     await remove(web3.utils.fromDecimal(10));
     // await remove(web3.utils.fromDecimal(7));
 
     await tableScan();
