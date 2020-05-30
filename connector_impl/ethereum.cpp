@@ -10,6 +10,21 @@ static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *use
     return size * nmemb;
 }
 
+static void parse32ByteHexString(std::string s, uint8_t* out) {
+  const char* hexString = s.c_str();
+
+  for(int i=0; i<32; i++) {
+    char byteString[3];
+    byteString[0] = hexString[2*i];
+    byteString[1] = hexString[2*i+1];
+    byteString[2] = 0; // termination character
+
+    // convert 1-byte hex string to numeric representation
+    uint8_t sNum = (uint8_t) strtoul(byteString, nullptr, 16);
+    out[i] = sNum;
+  }
+}
+
 static std::vector<std::string> Split(const std::string& str, int splitLength)
 {
     int NumSubstrings = str.length() / splitLength;
@@ -29,24 +44,6 @@ static std::vector<std::string> Split(const std::string& str, int splitLength)
     return ret;
 }
 
-static std::string hexToASCII(std::string hex)
-{
-    // initialize the ASCII code string as empty.
-    std::string ascii = "";
-    for (size_t i = 0; i < hex.length(); i += 2)
-    {
-        // extract two characters from hex string
-        std::string part = hex.substr(i, 2);
-
-        // change it into base 16 and
-        // typecast as the character
-        char ch = stoul(part, nullptr, 16);
-
-        // add this char to final ASCII string
-        ascii += ch;
-    }
-    return ascii;
-}
 
 
 Ethereum::Ethereum(const std::string&) {}
@@ -65,7 +62,7 @@ int Ethereum::remove(TableName, ByteData *) {
   return 0;
 }
 
-void Ethereum::tableScan(TableName, std::vector<ByteData> &tuples) {
+void Ethereum::tableScan(TableName, std::vector<ByteData> &tuples, size_t keyLength, size_t valueLength) {
     CURL *curl;
     //CURLcode res;
     std::string readBuffer;
@@ -75,7 +72,7 @@ void Ethereum::tableScan(TableName, std::vector<ByteData> &tuples) {
         curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8545");
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"jsonrpc\":\"2.0\",\"method\":\"eth_call\",\"params\":[{\"data\":\"0xb3055e26\",\"to\":\"0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A\"}, \"latest\"],\"id\":1}");
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"jsonrpc\":\"2.0\",\"method\":\"eth_call\",\"params\":[{\"data\":\"0xb3055e26\",\"to\":\"0xd6F0b586c959671B11c92111De4785b7f4890D96\"}, \"latest\"],\"id\":1}");
         /*res = */curl_easy_perform(curl);
         curl_easy_cleanup(curl);
 
@@ -97,16 +94,21 @@ void Ethereum::tableScan(TableName, std::vector<ByteData> &tuples) {
 
                 int valueIndex = i+count+1;
 
-                std::string key = hexToASCII(results[i]);
-                std::string value = hexToASCII(results[valueIndex]);
+                uint8_t key[32]; // 32 byte value
+                parse32ByteHexString(results[i], key);
 
-                std::cout << i << ": " << key << " - " << valueIndex << ": " << value << std::endl;
+                uint8_t value[32]; // 32 byte key
+                parse32ByteHexString(results[valueIndex], value);
 
-                std::string rowStr = key + value;
-                unsigned char* row = new unsigned char[64];
-                memcpy(row, rowStr.c_str(), 64);
+                auto row = new unsigned char[keyLength + valueLength];
 
-                ByteData bd = ByteData(row, 64);
+                // Copy key
+                memcpy(&(row[0]), key, keyLength);
+
+                // Copy value
+                memcpy(&(row[keyLength]), value, valueLength);
+
+                ByteData bd = ByteData(row, keyLength + valueLength);
                 tuples.push_back(bd);
             }
 

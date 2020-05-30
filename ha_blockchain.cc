@@ -464,9 +464,13 @@ int ha_blockchain::rnd_init(bool) {
   // current_position = 0;
   // keys = connector->getAllKeys(table->alias);
 
+  Field* key_field = *(table->field);
+  size_t keyLength = key_field->pack_length();
+  size_t valueLength = table->s->reclength - keyLength - table->s->null_bytes;
+
   current_position = -1;
   if(tableScanData.empty()) {
-    connector->tableScan(table->alias, tableScanData);
+    connector->tableScan(table->alias, tableScanData, keyLength, valueLength);
   }
 
   tableScanDataDeleteFlag = false;
