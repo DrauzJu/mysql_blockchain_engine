@@ -36,6 +36,13 @@ static void parse32ByteHexString(std::string s, uint8_t* out) {
     }
 }
 
+static std::string charToHex(unsigned char* data) {
+    std::stringstream ss;
+    for (int i=0; i<32; i++)
+        ss << std::hex << (int)data[i];
+    return ss.str();
+}
+
 static std::vector<std::string> Split(const std::string& str, int splitLength) {
     int NumSubstrings = str.length() / splitLength;
     std::vector<std::string> ret;
@@ -115,20 +122,33 @@ int Ethereum::get(TableName, ByteData*, unsigned char*, int) {
     return 0;
 }
 
-int Ethereum::put(TableName, ByteData*, ByteData* ) {
+int Ethereum::put(TableName, ByteData* key, ByteData* value) {
+
+    std::string hexKey = charToHex(key->data);
+    std::string hexVal = charToHex(value->data);
+
 
     RPCparams params;
     params.method = "eth_sendTransaction";
-    params.data = "0x4c6670800a0000000000000000000000000000000000000000000000000000000000000056616c3100000000000000000000000000000000000000000000000000000000";
+    params.data = "0x4c667080" + hexKey + hexVal;
     params.from = "0x26B5A7711383EB82EC3f72DFBc007491a920D054";
     params.to = "0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A";
     params.gas = "0xf4240";
     params.gasPrice = "0x4a817c800";
+    std::cout << params.data << std::endl;
 
-    const std::string s = call(params);
-    std::cout << s << std::endl;
+    const std::string response = call(params);
+    std::cout << response << std::endl;
 
-    return 0;
+
+    if (response.find("error") == std::string::npos) {
+        std::cout << "put success" << std::endl;
+        return 0;
+    } else {
+        std::cout << "put failed" << std::endl;
+        return 1033;
+    }
+
 }
 
 int Ethereum::remove(TableName, ByteData *) {
