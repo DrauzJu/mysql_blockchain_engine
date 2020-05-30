@@ -4,29 +4,39 @@
 // todo: implement
 // For document of methods see connector.h
 
-static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
-{
+struct RPCparams {
+    std::string from;
+    std::string to;
+    std::string data;
+    std::string method;
+    std::string gas;
+    std::string gasPrice;
+    std::string latest;
+    int id;
+    RPCparams() : latest("latest"), id(1) {}
+};
+
+static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
     ((std::string*)userp)->append((char*)contents, size * nmemb);
     return size * nmemb;
 }
 
 static void parse32ByteHexString(std::string s, uint8_t* out) {
-  const char* hexString = s.c_str();
+    const char* hexString = s.c_str();
 
-  for(int i=0; i<32; i++) {
-    char byteString[3];
-    byteString[0] = hexString[2*i];
-    byteString[1] = hexString[2*i+1];
-    byteString[2] = 0; // termination character
+    for(int i=0; i<32; i++) {
+        char byteString[3];
+        byteString[0] = hexString[2*i];
+        byteString[1] = hexString[2*i+1];
+        byteString[2] = 0; // termination character
 
-    // convert 1-byte hex string to numeric representation
-    uint8_t sNum = (uint8_t) strtoul(byteString, nullptr, 16);
-    out[i] = sNum;
-  }
+        // convert 1-byte hex string to numeric representation
+        uint8_t sNum = (uint8_t) strtoul(byteString, nullptr, 16);
+        out[i] = sNum;
+    }
 }
 
-static std::vector<std::string> Split(const std::string& str, int splitLength)
-{
+static std::vector<std::string> Split(const std::string& str, int splitLength) {
     int NumSubstrings = str.length() / splitLength;
     std::vector<std::string> ret;
 
@@ -44,6 +54,57 @@ static std::vector<std::string> Split(const std::string& str, int splitLength)
     return ret;
 }
 
+static std::string parseParamsToJson(RPCparams params) {
+    std::vector<std::string> els;
+    std::string json = "";
+
+    if (!params.from.empty()) els.push_back("\"from\":\"" + params.from + "\"");
+    if (!params.data.empty()) els.push_back("\"data\":\"" + params.data + "\"");
+    if (!params.to.empty()) els.push_back("\"to\":\"" + params.to + "\"");
+    if (!params.gas.empty()) els.push_back("\"gas\":\"" + params.gas + "\"");
+    if (!params.gasPrice.empty()) els.push_back("\"gasPrice\":\"" + params.gasPrice + "\"");
+
+    for (std::vector<int>::size_type i = 0; i < els.size(); i++) {
+        json += els[i];
+        if (i < els.size() - 1) json += ",";
+    }
+
+    return json;
+}
+
+static std::string call(RPCparams params) {
+
+    CURL *curl;
+    //CURLcode res;
+    std::string readBuffer;
+
+    const std::string json = parseParamsToJson(params);
+    const std::string latest = params.latest.empty() ? "" : ",\"" + params.latest + "\"";
+    const std::string postData = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(params.id) + ",\"method\":\"" + params.method + "\",\"params\":[{" + json + "}" + latest + "]}";
+    std::cout << postData << std::endl;
+
+    curl = curl_easy_init();
+    if (curl) {
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8545");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
+/*res = */curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+
+        //std::cout << readBuffer << std::endl;
+    } else std::cout << "no curl" << std::endl;
+
+    return readBuffer;
+}
+
+
+
+
 
 
 Ethereum::Ethereum(const std::string&) {}
@@ -51,19 +112,12 @@ Ethereum::Ethereum(const std::string&) {}
 Ethereum::~Ethereum() = default;
 
 int Ethereum::get(TableName, ByteData*, unsigned char*, int) {
-  return 0;
+    return 0;
 }
 
 int Ethereum::put(TableName, ByteData*, ByteData* ) {
-  return 0;
-}
 
-int Ethereum::remove(TableName, ByteData *) {
-  return 0;
-}
-
-void Ethereum::tableScan(TableName, std::vector<ByteData> &tuples, size_t keyLength, size_t valueLength) {
-    CURL *curl;
+    /*CURL *curl;
     //CURLcode res;
     std::string readBuffer;
 
@@ -72,50 +126,65 @@ void Ethereum::tableScan(TableName, std::vector<ByteData> &tuples, size_t keyLen
         curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8545");
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"jsonrpc\":\"2.0\",\"method\":\"eth_call\",\"params\":[{\"data\":\"0xb3055e26\",\"to\":\"0xd6F0b586c959671B11c92111De4785b7f4890D96\"}, \"latest\"],\"id\":1}");
-        /*res = */curl_easy_perform(curl);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"eth_sendTransaction\",\"params\":[{\"from\":\"0xe85df01aacc72bc97fa9586c1202dc5eb218031c\",\"gas\":\"0xf4240\",\"data\":\"0x4c6670800a0000000000000000000000000000000000000000000000000000000000000056616c3100000000000000000000000000000000000000000000000000000000\",\"gasPrice\":\"0x4a817c800\",\"to\":\"0xecd60d97e8320ce39f63f2d5f50c8569dbb4c03a\"}]}");
+        *//*res = *//*curl_easy_perform(curl);
         curl_easy_cleanup(curl);
 
-        std::regex rgx(".*\"result\":\"0x(\\w+)\".*");
-        std::smatch match;
+        std::cout << readBuffer << std::endl;
+    } else std::cout << "no curl" << std::endl;*/
 
-        const std::string s = readBuffer;
-        if (std::regex_search(s.begin(), s.end(), match, rgx)) {
-            //std::cout << "match: " << match[1] << '\n';
+    return 0;
+}
 
-            std::vector<std::string> results = Split(match[1], 64);
+int Ethereum::remove(TableName, ByteData *) {
+    return 0;
+}
 
-            unsigned int count;
-            std::stringstream ss;
-            ss << std::hex << results[2];
-            ss >> count;
+void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLength, size_t valueLength) {
 
-            for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
+    RPCparams params;
+    params.method = "eth_call";
+    params.data = "0xb3055e26";
+    params.to = "0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A";
 
-                int valueIndex = i+count+1;
 
-                uint8_t key[32]; // 32 byte value
-                parse32ByteHexString(results[i], key);
+    std::regex rgx(".*\"result\":\"0x(\\w+)\".*");
+    std::smatch match;
 
-                uint8_t value[32]; // 32 byte key
-                parse32ByteHexString(results[valueIndex], value);
+    const std::string s = call(params);
+    std::cout << s << std::endl;
+    if (std::regex_search(s.begin(), s.end(), match, rgx)) {
+        //std::cout << "match: " << match[1] << '\n';
 
-                auto row = new unsigned char[keyLength + valueLength];
+        std::vector <std::string> results = Split(match[1], 64);
 
-                // Copy key
-                memcpy(&(row[0]), key, keyLength);
+        unsigned int count;
+        std::stringstream ss;
+        ss << std::hex << results[2];
+        ss >> count;
 
-                // Copy value
-                memcpy(&(row[keyLength]), value, valueLength);
+        for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
 
-                ByteData bd = ByteData(row, keyLength + valueLength);
-                tuples.push_back(bd);
-            }
+            int valueIndex = i + count + 1;
 
-        } else std::cout << "no match" << std::endl;
+            uint8_t key[32]; // 32 byte value
+            parse32ByteHexString(results[i], key);
 
-        //std::cout << readBuffer << std::endl;
-    } else std::cout << "no curl" << std::endl;
+            uint8_t value[32]; // 32 byte key
+            parse32ByteHexString(results[valueIndex], value);
 
-    //tuples = std::vector<ByteData>();
+            auto row = new unsigned char[keyLength + valueLength];
+
+            // Copy key
+            memcpy(&(row[0]), key, keyLength);
+
+            // Copy value
+            memcpy(&(row[keyLength]), value, valueLength);
+
+            ByteData bd = ByteData(row, keyLength + valueLength);
+            tuples.push_back(bd);
+        }
+
+    } else std::cout << "no match" << std::endl;
+
 }
