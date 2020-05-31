@@ -146,13 +146,37 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
         return 0;
     } else {
         std::cout << "put failed" << std::endl;
-        return 1033;
+        return 1;
     }
 
 }
 
-int Ethereum::remove(TableName, ByteData *) {
-    return 0;
+int Ethereum::remove(TableName, ByteData *key) {
+
+    std::string hexKey = charToHex(key->data);
+
+
+    RPCparams params;
+    params.method = "eth_sendTransaction";
+    params.data = "0x95bc2673" + hexKey;
+    params.from = "0x26B5A7711383EB82EC3f72DFBc007491a920D054";
+    params.to = "0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A";
+    params.gas = "0xf4240";
+    params.gasPrice = "0x4a817c800";
+    std::cout << params.data << std::endl;
+
+    const std::string response = call(params);
+    std::cout << response << std::endl;
+
+
+    if (response.find("error") == std::string::npos) {
+        std::cout << "remove success" << std::endl;
+        return 0;
+    } else {
+        std::cout << "remove failed" << std::endl;
+        return 1;
+    }
+
 }
 
 void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLength, size_t valueLength) {
