@@ -16,6 +16,12 @@ struct RPCparams {
     RPCparams() : id(1) {}
 };
 
+
+void log(const std::string& msg, const std::string& method = "") {
+    const std::string m = method.empty() ? "] " : "- " + method + "] ";
+    std::cout << "[ETHEREUM" << m << msg << std::endl;
+}
+
 static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
     ((std::string*)userp)->append((char*)contents, size * nmemb);
     return size * nmemb;
@@ -47,14 +53,12 @@ static std::vector<std::string> Split(const std::string& str, int splitLength) {
     int NumSubstrings = str.length() / splitLength;
     std::vector<std::string> ret;
 
-    for (auto i = 0; i < NumSubstrings; i++)
-    {
+    for (auto i = 0; i < NumSubstrings; i++) {
         ret.push_back(str.substr(i * splitLength, splitLength));
     }
 
     // If there are leftover characters, create a shorter item at the end.
-    if (str.length() % splitLength != 0)
-    {
+    if (str.length() % splitLength != 0) {
         ret.push_back(str.substr(splitLength * NumSubstrings));
     }
 
@@ -88,7 +92,7 @@ static std::string call(RPCparams params) {
     const std::string json = parseParamsToJson(params);
     const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";
     const std::string postData = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(params.id) + ",\"method\":\"" + params.method + "\",\"params\":[{" + json + "}" + quantity_tag + "]}";
-    std::cout << postData << std::endl;
+    log("Body: " + postData, "Call");
 
     curl = curl_easy_init();
     if (curl) {
@@ -104,7 +108,7 @@ static std::string call(RPCparams params) {
         curl_easy_cleanup(curl);
 
         //std::cout << readBuffer << std::endl;
-    } else std::cout << "no curl" << std::endl;
+    } else log("no curl", "Call");
 
     return readBuffer;
 }
@@ -114,7 +118,11 @@ static std::string call(RPCparams params) {
 
 
 
-Ethereum::Ethereum(const std::string&) {}
+
+Ethereum::Ethereum(std::string contractAddress) {
+    _contractAddress = contractAddress;
+    log("Contract Address: " + _contractAddress);
+}
 
 Ethereum::~Ethereum() = default;
 
@@ -132,20 +140,20 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
     params.method = "eth_sendTransaction";
     params.data = "0x4c667080" + hexKey + hexVal;
     params.from = "0x26B5A7711383EB82EC3f72DFBc007491a920D054";
-    params.to = "0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A";
+    params.to = _contractAddress;
     params.gas = "0xf4240";
     params.gasPrice = "0x4a817c800";
-    std::cout << params.data << std::endl;
+    log("Data: " + params.data, "Put");
 
     const std::string response = call(params);
-    std::cout << response << std::endl;
+    log("Response: " + response, "Put");
 
 
     if (response.find("error") == std::string::npos) {
-        std::cout << "put success" << std::endl;
+        log("success", "Put");
         return 0;
     } else {
-        std::cout << "put failed" << std::endl;
+        log("failed", "Put");
         return 1;
     }
 
@@ -160,20 +168,20 @@ int Ethereum::remove(TableName, ByteData *key) {
     params.method = "eth_sendTransaction";
     params.data = "0x95bc2673" + hexKey;
     params.from = "0x26B5A7711383EB82EC3f72DFBc007491a920D054";
-    params.to = "0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A";
+    params.to = _contractAddress;
     params.gas = "0xf4240";
     params.gasPrice = "0x4a817c800";
-    std::cout << params.data << std::endl;
+    log("Data: " + params.data, "Remove");
 
     const std::string response = call(params);
-    std::cout << response << std::endl;
+    log("Response: " + response, "Remove");
 
 
     if (response.find("error") == std::string::npos) {
-        std::cout << "remove success" << std::endl;
+        log("success", "Remove");
         return 0;
     } else {
-        std::cout << "remove failed" << std::endl;
+        log("failed", "Remove");
         return 1;
     }
 
@@ -184,7 +192,7 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
     RPCparams params;
     params.method = "eth_call";
     params.data = "0xb3055e26";
-    params.to = "0xEcD60d97E8320Ce39F63F2D5F50C8569dBB4c03A";
+    params.to = _contractAddress;
     params.quantity_tag = "latest";
 
 
@@ -192,7 +200,7 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
     std::smatch match;
 
     const std::string s = call(params);
-    std::cout << s << std::endl;
+    log("Response: " + s, "tableScan");
     if (std::regex_search(s.begin(), s.end(), match, rgx)) {
         //std::cout << "match: " << match[1] << '\n';
 
@@ -225,6 +233,6 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
             tuples.push_back(bd);
         }
 
-    } else std::cout << "no match" << std::endl;
+    } else log("no result in response", "tableScan");
 
 }

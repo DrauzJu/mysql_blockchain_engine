@@ -226,7 +226,7 @@ int ha_blockchain::open(const char *, int, uint, const dd::Table *) {
       if(searchAddress == ha_blockchain::tableContractInfo->end()) {
         connector = std::unique_ptr<Connector>(new Ethereum(""));
       } else {
-        connector = std::unique_ptr<Connector>(new Ethereum(searchAddress->first));
+        connector = std::unique_ptr<Connector>(new Ethereum(searchAddress->second));
       }
 
       break;
