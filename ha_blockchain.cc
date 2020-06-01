@@ -365,12 +365,9 @@ int ha_blockchain::delete_row(const uchar *buf) {
   index.
 */
 
-int ha_blockchain::index_read_map(uchar *, const uchar *, key_part_map,
-                               enum ha_rkey_function) {
-  int rc;
-  DBUG_TRACE;
-  rc = HA_ERR_WRONG_COMMAND;
-  return rc;
+int ha_blockchain::index_read_map(uchar *buf, const uchar *key, key_part_map,
+                               enum ha_rkey_function func) {
+  return index_read(buf, key, 0, func);
 }
 
 /**
@@ -429,6 +426,36 @@ int ha_blockchain::index_last(uchar *) {
   DBUG_TRACE;
   rc = HA_ERR_WRONG_COMMAND;
   return rc;
+}
+
+int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
+                              enum ha_rkey_function key_func) {
+  // Check that exakt match is required
+  if(key_func != HA_READ_KEY_EXACT) {
+    return HA_ERR_WRONG_COMMAND;
+  }
+
+  // check that used index uses first column
+  KEY key_used = table->key_info[active_index];
+  if(key_used.key_part->field != *(table->field)) {
+    return HA_ERR_WRONG_COMMAND;
+  }
+
+  std::cout << "Using index to read tuples!!!" << std::endl;
+
+  // set required zero bits
+  uint initial_null_bytes = table->s->null_bytes;
+  memset(buf, 0, initial_null_bytes);
+  uint pos = initial_null_bytes;
+
+  // Extract key
+  ByteData keyBD(const_cast<uchar*>(key), (*(table->field))->pack_length());
+
+  // Get value
+  findConnector(table->alias);
+  connector->get(table->alias, &keyBD, &(buf[pos]));
+
+  return 0;
 }
 
 /**
