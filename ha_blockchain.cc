@@ -447,9 +447,10 @@ int ha_blockchain::index_last(uchar *) {
 int ha_blockchain::rnd_init(bool) {
   log("Preparing for table scan");
 
-  // Getting all keys and initializing position
-  // current_position = 0;
-  // keys = connector->getAllKeys(table->alias);
+  if(tableScanDataDeleteFlag) {
+    tableScanData.clear();
+    tableScanDataDeleteFlag = false;
+  }
 
   Field* key_field = *(table->field);
   size_t keyLength = key_field->pack_length();
@@ -459,8 +460,6 @@ int ha_blockchain::rnd_init(bool) {
   if(tableScanData.empty()) {
     connector->tableScan(table->alias, tableScanData, keyLength, valueLength);
   }
-
-  tableScanDataDeleteFlag = false;
 
   DBUG_TRACE;
   return 0;
