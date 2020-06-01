@@ -795,18 +795,6 @@ int ha_blockchain::find_current_row(uchar *buf) {
 }
 
 int ha_blockchain::find_row(int index, uchar *buf) {
-  /*ByteData* key = &(keys[current_position]);
-
-  if(key == nullptr) {
-    return HA_ERR_END_OF_FILE;
-  }
-
-  uint initial_null_bytes = table->s->null_bytes;
-  memset(buf, 0, initial_null_bytes);
-  int success = connector->get(table->alias, key, buf, initial_null_bytes);*/
-
-  // --------------------------------------------
-
   ByteData data;
   try {
     data = tableScanData.at(index);

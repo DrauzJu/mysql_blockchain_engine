@@ -134,7 +134,7 @@ Ethereum::Ethereum(std::string contractAddress) {
 
 Ethereum::~Ethereum() = default;
 
-int Ethereum::get(TableName, ByteData*, unsigned char*, int) {
+int Ethereum::get(TableName, ByteData*, unsigned char*) {
     return 0;
 }
 

@@ -15,7 +15,7 @@ public:
     explicit Ethereum(std::string contractAddress);
     ~Ethereum() override;
 
-    int get(TableName table, ByteData* key, unsigned char* buf, int buf_write_index) override;
+    int get(TableName table, ByteData* key, unsigned char* buf) override;
     int put(TableName table, ByteData* key, ByteData* value) override;
     int remove(TableName table, ByteData *key) override;
     void tableScan(TableName table, std::vector<ByteData> &tuples, size_t keyLength, size_t valueLength) override;

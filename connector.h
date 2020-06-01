@@ -39,7 +39,7 @@ class Connector {
    * Write single KV-pair (concatenated) into byte buffer buf, starting at buf_write_index
    *
    */
-  virtual int get(TableName table, ByteData* key, unsigned char* buf, int buf_write_index) = 0;
+  virtual int get(TableName table, ByteData* key, unsigned char* buf) = 0;
 
   /*
    * returns 0 on success, 1 on failure
