@@ -1,5 +1,5 @@
 #include "ethereum.h"
-
+#include <iomanip>
 
 // todo: implement
 // For document of methods see connector.h
@@ -46,12 +46,13 @@ static std::string byteArrayToHex(ByteData* data) {
     assert(data->dataSize <= 32);
 
     std::stringstream ss;
+    ss << std::hex;
     int i=0;
     for (; i<data->dataSize; i++)
-        ss << std::hex << (int) (data->data[i]);
+      ss << std::setw(2) << std::setfill('0') << (int) (data->data[i]);
 
     for(; i<32; i++)
-      ss << "00";
+      ss << std::setw(2) << std::setfill('0') << 0;
 
     return ss.str();
 }
