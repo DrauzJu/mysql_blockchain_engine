@@ -12,7 +12,7 @@
 class Ethereum : public Connector {
 
 public:
-    explicit Ethereum(std::string contractAddress);
+    explicit Ethereum(std::string contractAddress, std::string fromAddress);
     ~Ethereum() override;
 
     int get(TableName table, ByteData* key, unsigned char* buf) override;
@@ -23,6 +23,7 @@ public:
 
 private:
     std::string _contractAddress;
+    std::string _fromAddress;
 
 };
 

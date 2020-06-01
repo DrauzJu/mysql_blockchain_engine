@@ -127,8 +127,10 @@ static std::string call(RPCparams params) {
 
 
 
-Ethereum::Ethereum(std::string contractAddress) {
+Ethereum::Ethereum(std::string contractAddress, std::string fromAddress) {
     _contractAddress = contractAddress;
+    _fromAddress = fromAddress;
+
     log("Contract Address: " + _contractAddress);
 }
 
@@ -147,7 +149,7 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
     RPCparams params;
     params.method = "eth_sendTransaction";
     params.data = "0x4c667080" + hexKey + hexVal;
-    params.from = "0x26B5A7711383EB82EC3f72DFBc007491a920D054";
+    params.from = _fromAddress;
     params.to = _contractAddress;
     params.gas = "0xf4240";
     params.gasPrice = "0x4a817c800";
@@ -174,7 +176,7 @@ int Ethereum::remove(TableName, ByteData *key) {
     RPCparams params;
     params.method = "eth_sendTransaction";
     params.data = "0x95bc2673" + hexKey;
-    params.from = "0x26B5A7711383EB82EC3f72DFBc007491a920D054";
+    params.from = _fromAddress;
     params.to = _contractAddress;
     params.gas = "0xf4240";
     params.gasPrice = "0x4a817c800";

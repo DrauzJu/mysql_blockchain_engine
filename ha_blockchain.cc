@@ -116,6 +116,7 @@ handlerton *blockchain_hton;
 static int config_type;
 static char* config_connection;
 static char* config_eth_contracts;
+static char* config_eth_from;
 
 /* Interface to mysqld, to check system tables supported by SE */
 static bool blockchain_is_supported_system_table(const char *db,
@@ -859,9 +860,11 @@ void ha_blockchain::findConnector(const char* tableName) {
     case 0: {
       auto searchAddress = ha_blockchain::tableContractInfo->find(std::string(tableName));
       if(searchAddress == ha_blockchain::tableContractInfo->end()) {
-        connector = std::unique_ptr<Connector>(new Ethereum(""));
+        connector = std::unique_ptr<Connector>(
+            new Ethereum("", std::string(config_eth_from)));
       } else {
-        connector = std::unique_ptr<Connector>(new Ethereum(searchAddress->second));
+        connector = std::unique_ptr<Connector>(
+            new Ethereum(searchAddress->second, std::string(config_eth_from)));
       }
 
       break;
@@ -886,10 +889,15 @@ static MYSQL_SYSVAR_STR(bc_eth_contracts, config_eth_contracts, PLUGIN_VAR_RQCMD
                         "Ethereum contract addresses", nullptr, nullptr,
                         nullptr);
 
+static MYSQL_SYSVAR_STR(bc_eth_from, config_eth_from, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+                        "Ethereum FROM address", nullptr, nullptr,
+                        nullptr);
+
 static SYS_VAR *blockchain_system_variables[] = {
     MYSQL_SYSVAR(bc_type), // blockchain type: 0 - ethereum
     MYSQL_SYSVAR(bc_connection), // blockchain connection string (e.g. for Ethereum: http://127.0.0.1:8545)
     MYSQL_SYSVAR(bc_eth_contracts), // Concept: one contract per table, format: tableName1:contractAddress,tableName2:contractAddress,...
+    MYSQL_SYSVAR(bc_eth_from),
     nullptr
 };
 
