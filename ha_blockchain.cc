@@ -874,7 +874,7 @@ void ha_blockchain::findConnector(const char* tableName) {
       if(searchAddress == ha_blockchain::tableContractInfo->end()) {
         connector = std::unique_ptr<Connector>(new Ethereum(""));
       } else {
-        connector = std::unique_ptr<Connector>(new Ethereum(searchAddress->first));
+        connector = std::unique_ptr<Connector>(new Ethereum(searchAddress->second));
       }
 
       break;
