@@ -124,4 +124,10 @@ contract KVStore {
         return (values, blocknumbers);
     }
 
+    function drop()
+    public
+    {
+        selfdestruct(msg.sender);
+    }
+
 }

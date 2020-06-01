@@ -236,3 +236,8 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
     } else log("no result in response", "tableScan");
 
 }
+
+int Ethereum::dropTable(TableName ) {
+  // todo: implement: call function drop() of contract
+  return 0;
+}

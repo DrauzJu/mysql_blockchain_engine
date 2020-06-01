@@ -243,6 +243,8 @@ class ha_blockchain : public handler {
    */
    void log(const std::string& msg);
 
+  void findConnector(const char* tableName);
+
   int find_current_row(uchar *buf);
   int find_row(int index, uchar *buf);
 

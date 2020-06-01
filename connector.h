@@ -56,6 +56,11 @@ class Connector {
    * --> faster than getting each KV-pair in an own transaction
    */
   virtual void tableScan(TableName table, std::vector<ByteData> &tuples, size_t keyLength, size_t valueLength) = 0;
+
+  /*
+   * Drop table
+   */
+  virtual int dropTable(TableName table) = 0;
 };
 
 #endif  // MYSQL_8_0_20_CONNECTOR_H

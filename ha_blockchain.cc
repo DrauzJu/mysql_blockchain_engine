@@ -220,20 +220,7 @@ int ha_blockchain::open(const char *, int, uint, const dd::Table *) {
   msg << "Opening table";
   log(msg.str());
 
-  switch(config_type) {
-    case 0: {
-      auto searchAddress = ha_blockchain::tableContractInfo->find(std::string(table->alias));
-      if(searchAddress == ha_blockchain::tableContractInfo->end()) {
-        connector = std::unique_ptr<Connector>(new Ethereum(""));
-      } else {
-        connector = std::unique_ptr<Connector>(new Ethereum(searchAddress->second));
-      }
-
-      break;
-    }
-
-    default: std::cout << "Error! Unknown blockchain type" << std::endl;
-  }
+  findConnector(table->alias);
 
   return 0;
 }
@@ -727,10 +714,9 @@ THR_LOCK_DATA **ha_blockchain::store_lock(THD *, THR_LOCK_DATA **to,
   @see
   delete_table and ha_create_table() in handler.cc
 */
-int ha_blockchain::delete_table(const char *, const dd::Table *) {
-  DBUG_TRACE;
-  /* This is not implemented but we want someone to be able that it works. */
-  return HA_ERR_WRONG_COMMAND; // todo: implement
+int ha_blockchain::delete_table(const char *name, const dd::Table *) {
+  findConnector(name);
+  return connector->dropTable(name);
 }
 
 /**
@@ -873,6 +859,29 @@ void ha_blockchain::extractValue(uchar *buf, ulong key_size, ByteData* value) {
 // don't just delete tableScanData, might be still in use during a
 void ha_blockchain::invalidateTableScanData()  {
   tableScanDataDeleteFlag = true;
+}
+
+// Must be a separate function since has to be called at a different time depending on the operation
+// i.e. it can't be called e.g. in the constructor
+void ha_blockchain::findConnector(const char* tableName) {
+  if(connector != nullptr) {
+    return;
+  }
+
+  switch(config_type) {
+    case 0: {
+      auto searchAddress = ha_blockchain::tableContractInfo->find(std::string(tableName));
+      if(searchAddress == ha_blockchain::tableContractInfo->end()) {
+        connector = std::unique_ptr<Connector>(new Ethereum(""));
+      } else {
+        connector = std::unique_ptr<Connector>(new Ethereum(searchAddress->first));
+      }
+
+      break;
+    }
+
+    default: std::cout << "Error! Unknown blockchain type" << std::endl;
+  }
 }
 
 struct st_mysql_storage_engine blockchain_storage_engine = {
