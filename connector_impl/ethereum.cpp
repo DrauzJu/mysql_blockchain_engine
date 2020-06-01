@@ -1,5 +1,5 @@
 #include "ethereum.h"
-
+#include <iomanip>
 
 // todo: implement
 // For document of methods see connector.h
@@ -42,10 +42,18 @@ static void parse32ByteHexString(std::string s, uint8_t* out) {
     }
 }
 
-static std::string charToHex(unsigned char* data) {
+static std::string byteArrayToHex(ByteData* data) {
+    assert(data->dataSize <= 32);
+
     std::stringstream ss;
-    for (int i=0; i<32; i++)
-        ss << std::hex << (int)data[i];
+    ss << std::hex;
+    int i=0;
+    for (; i<data->dataSize; i++)
+      ss << std::setw(2) << std::setfill('0') << (int) (data->data[i]);
+
+    for(; i<32; i++)
+      ss << std::setw(2) << std::setfill('0') << 0;
+
     return ss.str();
 }
 
@@ -132,8 +140,8 @@ int Ethereum::get(TableName, ByteData*, unsigned char*, int) {
 
 int Ethereum::put(TableName, ByteData* key, ByteData* value) {
 
-    std::string hexKey = charToHex(key->data);
-    std::string hexVal = charToHex(value->data);
+    std::string hexKey = byteArrayToHex(key);
+    std::string hexVal = byteArrayToHex(value);
 
 
     RPCparams params;
@@ -161,8 +169,7 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
 
 int Ethereum::remove(TableName, ByteData *key) {
 
-    std::string hexKey = charToHex(key->data);
-
+    std::string hexKey = byteArrayToHex(key);
 
     RPCparams params;
     params.method = "eth_sendTransaction";

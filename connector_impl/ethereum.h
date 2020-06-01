@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <regex>
+#include <cassert>
 #include <curl/curl.h>
 
 #include "../connector.h"
