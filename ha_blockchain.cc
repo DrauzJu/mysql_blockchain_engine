@@ -859,13 +859,17 @@ void ha_blockchain::findConnector(const char* tableName) {
   switch(config_type) {
     case 0: {
       auto searchAddress = ha_blockchain::tableContractInfo->find(std::string(tableName));
-      if(searchAddress == ha_blockchain::tableContractInfo->end()) {
-        connector = std::unique_ptr<Connector>(
-            new Ethereum("", std::string(config_eth_from)));
-      } else {
-        connector = std::unique_ptr<Connector>(
-            new Ethereum(searchAddress->second, std::string(config_eth_from)));
+      std::string contractAddress = "";
+      if(searchAddress != ha_blockchain::tableContractInfo->end()) {
+        contractAddress = searchAddress->second;
       }
+
+      connector = std::unique_ptr<Connector>(
+          new Ethereum(
+              std::string(config_connection),
+              contractAddress,
+              std::string(config_eth_from))
+          );
 
       break;
     }

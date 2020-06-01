@@ -4,18 +4,6 @@
 // todo: implement
 // For document of methods see connector.h
 
-struct RPCparams {
-    std::string from;
-    std::string to;
-    std::string data;
-    std::string method;
-    std::string gas;
-    std::string gasPrice;
-    std::string quantity_tag;
-    int id;
-    RPCparams() : id(1) {}
-};
-
 
 void log(const std::string& msg, const std::string& method = "") {
     const std::string m = method.empty() ? "] " : "- " + method + "] ";
@@ -91,45 +79,15 @@ static std::string parseParamsToJson(RPCparams params) {
     return json;
 }
 
-static std::string call(RPCparams params) {
-
-    CURL *curl;
-    //CURLcode res;
-    std::string readBuffer;
-
-    const std::string json = parseParamsToJson(params);
-    const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";
-    const std::string postData = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(params.id) + ",\"method\":\"" + params.method + "\",\"params\":[{" + json + "}" + quantity_tag + "]}";
-    log("Body: " + postData, "Call");
-
-    curl = curl_easy_init();
-    if (curl) {
-        struct curl_slist *headers = NULL;
-        headers = curl_slist_append(headers, "Content-Type: application/json");
-
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8545");
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
-/*res = */curl_easy_perform(curl);
-        curl_easy_cleanup(curl);
-
-        //std::cout << readBuffer << std::endl;
-    } else log("no curl", "Call");
-
-    return readBuffer;
-}
 
 
 
 
-
-
-
-Ethereum::Ethereum(std::string contractAddress, std::string fromAddress) {
+Ethereum::Ethereum(std::string connectionString,
+                   std::string contractAddress, std::string fromAddress) {
     _contractAddress = contractAddress;
     _fromAddress = fromAddress;
+    _connectionString = connectionString;
 
     log("Contract Address: " + _contractAddress);
 }
@@ -249,4 +207,34 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
 int Ethereum::dropTable(TableName ) {
   // todo: implement: call function drop() of contract
   return 0;
+}
+
+std::string Ethereum::call(RPCparams params) {
+
+  CURL *curl;
+  //CURLcode res;
+  std::string readBuffer;
+
+  const std::string json = parseParamsToJson(params);
+  const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";
+  const std::string postData = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(params.id) + ",\"method\":\"" + params.method + "\",\"params\":[{" + json + "}" + quantity_tag + "]}";
+  log("Body: " + postData, "Call");
+
+  curl = curl_easy_init();
+  if (curl) {
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_URL, _connectionString.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
+/*res = */curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+
+    //std::cout << readBuffer << std::endl;
+  } else log("no curl", "Call");
+
+  return readBuffer;
 }
