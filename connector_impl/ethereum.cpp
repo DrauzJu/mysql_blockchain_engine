@@ -209,6 +209,7 @@ int Ethereum::dropTable(TableName ) {
   return 0;
 }
 
+// todo: check https://curl.haxx.se/libcurl/c/CURLOPT_TCP_KEEPALIVE.html for better performance
 std::string Ethereum::call(RPCparams params) {
 
   CURL *curl;
