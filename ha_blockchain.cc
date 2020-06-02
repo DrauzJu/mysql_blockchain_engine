@@ -449,11 +449,13 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
   uint pos = initial_null_bytes;
 
   // Extract key
-  ByteData keyBD(const_cast<uchar*>(key), (*(table->field))->pack_length());
+  uint8_t key_size = (*(table->field))->pack_length();
+  ByteData keyBD(const_cast<uchar*>(key), key_size);
 
   // Get value
   findConnector(table->alias);
-  connector->get(table->alias, &keyBD, &(buf[pos]));
+  int valueSize = table->s->reclength - key_size - initial_null_bytes;
+  connector->get(table->alias, &keyBD, &(buf[pos]), valueSize);
 
   return 0;
 }

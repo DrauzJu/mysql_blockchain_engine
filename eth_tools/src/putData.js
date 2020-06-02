@@ -38,6 +38,16 @@ async function remove(key) {
     });
 }
 
+async function get(key) {
+    const removeMethod = kvStore.methods.get(key);
+    const receipt = await removeMethod.call({
+        from: FROM_ACCOUNT,
+        gas: Math.pow(10, 6)
+    });
+
+    console.log(receipt);
+}
+
 async function run() {
     // await put(web3.utils.fromDecimal(1), web3.utils.fromDecimal(2));
      await put(web3.utils.fromAscii("Key1"), web3.utils.fromAscii("value1"));
