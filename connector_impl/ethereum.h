@@ -41,6 +41,7 @@ private:
     std::string _fromAddress;
     std::string _connectionString;
 
+    CURL *curl;
 };
 
 #endif  // MYSQL_8_0_20_ETHEREUM_H

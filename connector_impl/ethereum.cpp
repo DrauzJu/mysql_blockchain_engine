@@ -89,10 +89,17 @@ Ethereum::Ethereum(std::string connectionString,
     _fromAddress = fromAddress;
     _connectionString = connectionString;
 
+    curl = curl_easy_init();
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L); // Problem: ganache default keep-alive timeout is only 5s
+    curl_easy_setopt(curl, CURLOPT_URL, _connectionString.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+
     log("Contract Address: " + _contractAddress);
 }
 
-Ethereum::~Ethereum() = default;
+Ethereum::~Ethereum() {
+    curl_easy_cleanup(curl);
+}
 
 int Ethereum::get(TableName, ByteData*, unsigned char*) {
     return 0;
@@ -209,11 +216,8 @@ int Ethereum::dropTable(TableName ) {
   return 0;
 }
 
-// todo: check https://curl.haxx.se/libcurl/c/CURLOPT_TCP_KEEPALIVE.html for better performance
 std::string Ethereum::call(RPCparams params) {
 
-  CURL *curl;
-  //CURLcode res;
   std::string readBuffer;
 
   const std::string json = parseParamsToJson(params);
@@ -221,18 +225,14 @@ std::string Ethereum::call(RPCparams params) {
   const std::string postData = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(params.id) + ",\"method\":\"" + params.method + "\",\"params\":[{" + json + "}" + quantity_tag + "]}";
   log("Body: " + postData, "Call");
 
-  curl = curl_easy_init();
   if (curl) {
     struct curl_slist *headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_URL, _connectionString.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
-/*res = */curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
+    curl_easy_perform(curl);
 
     //std::cout << readBuffer << std::endl;
   } else log("no curl", "Call");
