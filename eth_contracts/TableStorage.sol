@@ -100,23 +100,12 @@ contract KVStore {
     view
     returns (bytes32 value, uint blocknumber)
     {
-        // check if key exists
-        // todo: improve performance
-        uint size = keyList.length;
-        bool found = false;
-
-        for(uint i=0; i<size; i++) {
-            if(keyList[i] == key) {
-                found = true;
-                break;
-            }
-        }
-
-        require(found);
-
         Value memory v = data[key];
         value = v.value;
         blocknumber = v.blocknumber;
+
+        // check if KV exists
+        require(blocknumber > 0);
 
         return (value, blocknumber);
     }
