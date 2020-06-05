@@ -109,10 +109,6 @@ int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) 
   RPCparams params;
   params.method = "eth_call";
   params.data = "0x8eaa6ac0" + hexKey;
-  params.from = _fromAddress;
-  params.to = _contractAddress;
-  params.gas = "0xf4240";
-  params.gasPrice = "0x4a817c800";
   log("Data: " + params.data, "Get");
 
   const std::string response = call(params);
@@ -158,10 +154,6 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
     RPCparams params;
     params.method = "eth_sendTransaction";
     params.data = "0x4c667080" + hexKey + hexVal;
-    params.from = _fromAddress;
-    params.to = _contractAddress;
-    params.gas = "0xf4240";
-    params.gasPrice = "0x4a817c800";
     log("Data: " + params.data, "Put");
 
     const std::string response = call(params);
@@ -185,10 +177,6 @@ int Ethereum::remove(TableName, ByteData *key) {
     RPCparams params;
     params.method = "eth_sendTransaction";
     params.data = "0x95bc2673" + hexKey;
-    params.from = _fromAddress;
-    params.to = _contractAddress;
-    params.gas = "0xf4240";
-    params.gasPrice = "0x4a817c800";
     log("Data: " + params.data, "Remove");
 
     const std::string response = call(params);
@@ -210,7 +198,6 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
     RPCparams params;
     params.method = "eth_call";
     params.data = "0xb3055e26";
-    params.to = _contractAddress;
     params.quantity_tag = "latest";
 
 
@@ -260,9 +247,14 @@ int Ethereum::dropTable(TableName ) {
   return 0;
 }
 
-std::string Ethereum::call(const RPCparams& params) {
+std::string Ethereum::call(RPCparams params) {
 
   std::string readBuffer;
+
+  params.from = _fromAddress;
+  params.to = _contractAddress;
+  params.gas = "0xf4240";
+  params.gasPrice = "0x4a817c800";
 
   const std::string json = parseParamsToJson(params);
   const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";
