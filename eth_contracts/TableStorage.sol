@@ -104,6 +104,9 @@ contract KVStore {
         value = v.value;
         blocknumber = v.blocknumber;
 
+        // check if KV exists
+        require(blocknumber > 0);
+
         return (value, blocknumber);
     }
 

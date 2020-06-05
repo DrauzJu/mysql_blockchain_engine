@@ -28,13 +28,13 @@ public:
                    std::string contractAddress, std::string fromAddress);
     ~Ethereum() override;
 
-    int get(TableName table, ByteData* key, unsigned char* buf) override;
+    int get(TableName table, ByteData* key, unsigned char* buf, int value_size) override;
     int put(TableName table, ByteData* key, ByteData* value) override;
     int remove(TableName table, ByteData *key) override;
     void tableScan(TableName table, std::vector<ByteData> &tuples, size_t keyLength, size_t valueLength) override;
     int dropTable(TableName table) override;
 
-    std::string call(RPCparams params);
+    std::string call(const RPCparams params);
 
 private:
     std::string _contractAddress;

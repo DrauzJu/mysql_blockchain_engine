@@ -123,7 +123,7 @@ class ha_blockchain : public handler {
     send. Return *real* limits of your storage engine here; MySQL will do
     min(your_limits, MySQL_limits) automatically.
    */
-  uint max_supported_record_length() const { return HA_MAX_REC_LENGTH; }
+  uint max_supported_record_length() const { return 64; }
 
   /** @brief
     unireg.cc will call this to make sure that the storage engine can handle
@@ -134,7 +134,7 @@ class ha_blockchain : public handler {
     There is no need to implement ..._key_... methods if your engine doesn't
     support indexes.
    */
-  uint max_supported_keys() const { return 0; }
+  uint max_supported_keys() const { return 1; }
 
   /** @brief
     unireg.cc will call this to make sure that the storage engine can handle
@@ -145,7 +145,7 @@ class ha_blockchain : public handler {
     There is no need to implement ..._key_... methods if your engine doesn't
     support indexes.
    */
-  uint max_supported_key_parts() const { return 0; }
+  uint max_supported_key_parts() const { return 1; }
 
   /** @brief
     unireg.cc will call this to make sure that the storage engine can handle
@@ -156,7 +156,7 @@ class ha_blockchain : public handler {
     There is no need to implement ..._key_... methods if your engine doesn't
     support indexes.
    */
-  uint max_supported_key_length() const { return 0; }
+  uint max_supported_key_length() const { return 32; }
 
   /** @brief
     Called in test_quick_select to determine if indexes should be used.
@@ -214,6 +214,9 @@ class ha_blockchain : public handler {
   int index_read_map(uchar *buf, const uchar *key, key_part_map keypart_map,
                      enum ha_rkey_function find_flag);
 
+  int index_read(uchar *buf, const uchar *key, uint key_len,
+                 enum ha_rkey_function find_flag);
+ public:
   /** @brief
     We implement this in ha_blockchain.cc. It's not an obligatory method;
     skip it and and MySQL will treat it as not implemented.

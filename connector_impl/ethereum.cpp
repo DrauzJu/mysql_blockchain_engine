@@ -1,5 +1,7 @@
 #include "ethereum.h"
+#include <include/my_base.h>
 #include <iomanip>
+#include <utility>
 
 // todo: implement
 // For document of methods see connector.h
@@ -15,7 +17,7 @@ static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *use
     return size * nmemb;
 }
 
-static void parse32ByteHexString(std::string s, uint8_t* out) {
+static void parse32ByteHexString(const std::string& s, uint8_t* out) {
     const char* hexString = s.c_str();
 
     for(int i=0; i<32; i++) {
@@ -25,7 +27,7 @@ static void parse32ByteHexString(std::string s, uint8_t* out) {
         byteString[2] = 0; // termination character
 
         // convert 1-byte hex string to numeric representation
-        uint8_t sNum = (uint8_t) strtoul(byteString, nullptr, 16);
+        auto sNum = (uint8_t) strtoul(byteString, nullptr, 16);
         out[i] = sNum;
     }
 }
@@ -85,9 +87,9 @@ static std::string parseParamsToJson(RPCparams params) {
 
 Ethereum::Ethereum(std::string connectionString,
                    std::string contractAddress, std::string fromAddress) {
-    _contractAddress = contractAddress;
-    _fromAddress = fromAddress;
-    _connectionString = connectionString;
+    _contractAddress = std::move(contractAddress);
+    _fromAddress = std::move(fromAddress);
+    _connectionString = std::move(connectionString);
 
     curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L); // Problem: ganache default keep-alive timeout is only 5s
@@ -101,8 +103,46 @@ Ethereum::~Ethereum() {
     curl_easy_cleanup(curl);
 }
 
-int Ethereum::get(TableName, ByteData*, unsigned char*) {
-    return 0;
+int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) {
+  std::string hexKey = byteArrayToHex(key);
+
+  RPCparams params;
+  params.method = "eth_call";
+  params.data = "0x8eaa6ac0" + hexKey;
+  log("Data: " + params.data, "Get");
+
+  const std::string response = call(params);
+  log("Response: " + response, "Get");
+
+
+  if (response.find("error") == std::string::npos) {
+    log("success", "Get");
+
+    // extract result
+    std::regex rgx(".*\"result\":\"0x(\\w+)\".*");
+    std::smatch match;
+
+    if (std::regex_search(response.begin(), response.end(), match, rgx)) {
+      std::string result = match[1];
+
+      uint8_t value[32]; // 32 byte value
+      parse32ByteHexString(result, value);
+
+      // Copy key
+      memcpy(&(buf[0]), key->data, key->dataSize);
+
+      // Copy value
+      memcpy(&(buf[key->dataSize]), value, value_size);
+
+      return 0;
+    } else {
+      log("No value for key found", "Get");
+      return HA_ERR_END_OF_FILE;
+    }
+  } else {
+    log("failed", "Get");
+    return 1;
+  }
 }
 
 int Ethereum::put(TableName, ByteData* key, ByteData* value) {
@@ -114,10 +154,6 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
     RPCparams params;
     params.method = "eth_sendTransaction";
     params.data = "0x4c667080" + hexKey + hexVal;
-    params.from = _fromAddress;
-    params.to = _contractAddress;
-    params.gas = "0xf4240";
-    params.gasPrice = "0x4a817c800";
     log("Data: " + params.data, "Put");
 
     const std::string response = call(params);
@@ -141,10 +177,6 @@ int Ethereum::remove(TableName, ByteData *key) {
     RPCparams params;
     params.method = "eth_sendTransaction";
     params.data = "0x95bc2673" + hexKey;
-    params.from = _fromAddress;
-    params.to = _contractAddress;
-    params.gas = "0xf4240";
-    params.gasPrice = "0x4a817c800";
     log("Data: " + params.data, "Remove");
 
     const std::string response = call(params);
@@ -166,7 +198,6 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
     RPCparams params;
     params.method = "eth_call";
     params.data = "0xb3055e26";
-    params.to = _contractAddress;
     params.quantity_tag = "latest";
 
 
@@ -189,10 +220,10 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
 
             int valueIndex = i + count + 1;
 
-            uint8_t key[32]; // 32 byte value
+            uint8_t key[32]; // 32 byte key
             parse32ByteHexString(results[i], key);
 
-            uint8_t value[32]; // 32 byte key
+            uint8_t value[32]; // 32 byte value
             parse32ByteHexString(results[valueIndex], value);
 
             auto row = new unsigned char[keyLength + valueLength];
@@ -219,6 +250,11 @@ int Ethereum::dropTable(TableName ) {
 std::string Ethereum::call(RPCparams params) {
 
   std::string readBuffer;
+
+  params.from = _fromAddress;
+  params.to = _contractAddress;
+  params.gas = "0xf4240";
+  params.gasPrice = "0x4a817c800";
 
   const std::string json = parseParamsToJson(params);
   const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";
