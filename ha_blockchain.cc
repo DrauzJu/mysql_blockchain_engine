@@ -430,7 +430,7 @@ int ha_blockchain::index_last(uchar *) {
 
 int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
                               enum ha_rkey_function key_func) {
-  // Check that exakt match is required
+  // Check that exact match is required
   if(key_func != HA_READ_KEY_EXACT) {
     return HA_ERR_WRONG_COMMAND;
   }
@@ -440,8 +440,6 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
   if(key_used.key_part->field != *(table->field)) {
     return HA_ERR_WRONG_COMMAND;
   }
-
-  std::cout << "Using index to read tuples!!!" << std::endl;
 
   // set required zero bits
   uint initial_null_bytes = table->s->null_bytes;
