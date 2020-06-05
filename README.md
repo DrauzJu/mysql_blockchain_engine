@@ -18,12 +18,8 @@ Install Boost library before and set path!
 cd mysql-8.0.20
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Debug -GNinja -DWITH_BOOST=BOOST_PATH_HERE ..
+cmake -DCMAKE_BUILD_TYPE=Debug -GNinja -DWITH_BOOST=BOOST_PATH_HERE DCMAKE_CXX_STANDARD_LIBRARIES="-lcurl" ..
 ninja
-```
-or with cURL (libcurl4-openssl-dev):
-```bash
-cmake -DCMAKE_BUILD_TYPE=Debug -GNinja -DWITH_BOOST=BOOST_PATH_HERE -DWITH_CURL=/usr/include/x86_64-linux-gnu/ -DCMAKE_CXX_STANDARD_LIBRARIES="-lcurl"
 ```
 
 ## Initial setup
