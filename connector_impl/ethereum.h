@@ -34,7 +34,7 @@ public:
     void tableScan(TableName table, std::vector<ByteData> &tuples, size_t keyLength, size_t valueLength) override;
     int dropTable(TableName table) override;
 
-    std::string call(const RPCparams params);
+    std::string call(const RPCparams params, bool setGas);
 
 private:
     std::string _contractAddress;

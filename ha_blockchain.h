@@ -123,7 +123,7 @@ class ha_blockchain : public handler {
     send. Return *real* limits of your storage engine here; MySQL will do
     min(your_limits, MySQL_limits) automatically.
    */
-  uint max_supported_record_length() const { return 64; }
+  uint max_supported_record_length() const { return 200; } // todo: 64 does not work, check why
 
   /** @brief
     unireg.cc will call this to make sure that the storage engine can handle

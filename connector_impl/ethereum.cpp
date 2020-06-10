@@ -109,9 +109,10 @@ int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) 
   RPCparams params;
   params.method = "eth_call";
   params.data = "0x8eaa6ac0" + hexKey;
+  params.quantity_tag = "latest";
   log("Data: " + params.data, "Get");
 
-  const std::string response = call(params);
+  const std::string response = call(params, true);
   log("Response: " + response, "Get");
 
 
@@ -156,7 +157,7 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
     params.data = "0x4c667080" + hexKey + hexVal;
     log("Data: " + params.data, "Put");
 
-    const std::string response = call(params);
+    const std::string response = call(params, true);
     log("Response: " + response, "Put");
 
 
@@ -179,7 +180,7 @@ int Ethereum::remove(TableName, ByteData *key) {
     params.data = "0x95bc2673" + hexKey;
     log("Data: " + params.data, "Remove");
 
-    const std::string response = call(params);
+    const std::string response = call(params, true);
     log("Response: " + response, "Remove");
 
 
@@ -204,7 +205,7 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
     std::regex rgx(".*\"result\":\"0x(\\w+)\".*");
     std::smatch match;
 
-    const std::string s = call(params);
+    const std::string s = call(params, false);
     log("Response: " + s, "tableScan");
     if (std::regex_search(s.begin(), s.end(), match, rgx)) {
         //std::cout << "match: " << match[1] << '\n';
@@ -247,14 +248,14 @@ int Ethereum::dropTable(TableName ) {
   return 0;
 }
 
-std::string Ethereum::call(RPCparams params) {
+std::string Ethereum::call(RPCparams params, bool setGas) {
 
   std::string readBuffer;
 
   params.from = _fromAddress;
   params.to = _contractAddress;
-  params.gas = "0xf4240";
-  params.gasPrice = "0x4a817c800";
+  if(setGas) params.gas = "0x7A120";
+  // params.gasPrice = "0x4a817c800";
 
   const std::string json = parseParamsToJson(params);
   const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";

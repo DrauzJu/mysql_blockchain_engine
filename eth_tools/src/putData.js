@@ -15,9 +15,13 @@ const kvStore = new web3.eth.Contract(abi, CONTRACT_ADDRESS);
 
 async function put(key, value) {
     const putMethod = kvStore.methods.put(key, value);
+    // const estimateGas = await putMethod.estimateGas({gas: 1});
+    // console.log("Estimating " + estimateGas + " for put");
+    console.log("Estimated gas for put: " + await putMethod.estimateGas());
+
     await putMethod.send({
         from: FROM_ACCOUNT,
-        gas: Math.pow(10, 6)
+        gas: 200000
     });
 }
 
@@ -34,15 +38,15 @@ async function remove(key) {
     const removeMethod = kvStore.methods.remove(key);
     await removeMethod.send({
         from: FROM_ACCOUNT,
-        gas: Math.pow(10, 6)
+        gas: 100000
     });
 }
 
 async function get(key) {
-    const removeMethod = kvStore.methods.get(key);
-    const receipt = await removeMethod.call({
+    const getMethod = kvStore.methods.get(key);
+    const receipt = await getMethod.call({
         from: FROM_ACCOUNT,
-        gas: Math.pow(10, 6)
+        gas: 100000
     });
 
     console.log(receipt);
