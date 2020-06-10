@@ -8,6 +8,7 @@
 #include <curl/curl.h>
 
 #include "../connector.h"
+#include "json.hpp"
 
 struct RPCparams {
   std::string from;

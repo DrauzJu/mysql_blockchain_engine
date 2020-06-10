@@ -9,7 +9,7 @@
 
 void log(const std::string& msg, const std::string& method = "") {
     const std::string m = method.empty() ? "] " : "- " + method + "] ";
-    std::cout << "[ETHEREUM" << m << msg << std::endl;
+    std::cout << "[ETHEREUM " << m << msg << std::endl;
 }
 
 static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
@@ -110,10 +110,10 @@ int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) 
   params.method = "eth_call";
   params.data = "0x8eaa6ac0" + hexKey;
   params.quantity_tag = "latest";
-  log("Data: " + params.data, "Get");
+  // log("Data: " + params.data, "Get");
 
   const std::string response = call(params, true);
-  log("Response: " + response, "Get");
+  // log("Response: " + response, "Get");
 
 
   if (response.find("error") == std::string::npos) {
@@ -155,10 +155,10 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
     RPCparams params;
     params.method = "eth_sendTransaction";
     params.data = "0x4c667080" + hexKey + hexVal;
-    log("Data: " + params.data, "Put");
+    // log("Data: " + params.data, "Put");
 
     const std::string response = call(params, true);
-    log("Response: " + response, "Put");
+    // log("Response: " + response, "Put");
 
 
     if (response.find("error") == std::string::npos) {
@@ -178,10 +178,10 @@ int Ethereum::remove(TableName, ByteData *key) {
     RPCparams params;
     params.method = "eth_sendTransaction";
     params.data = "0x95bc2673" + hexKey;
-    log("Data: " + params.data, "Remove");
+    // log("Data: " + params.data, "Remove");
 
     const std::string response = call(params, true);
-    log("Response: " + response, "Remove");
+    // log("Response: " + response, "Remove");
 
 
     if (response.find("error") == std::string::npos) {
@@ -201,46 +201,44 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
     params.data = "0xb3055e26";
     params.quantity_tag = "latest";
 
-
-    std::regex rgx(".*\"result\":\"0x(\\w+)\".*");
-    std::smatch match;
-
     const std::string s = call(params, false);
-    log("Response: " + s, "tableScan");
-    if (std::regex_search(s.begin(), s.end(), match, rgx)) {
-        //std::cout << "match: " << match[1] << '\n';
 
-        std::vector <std::string> results = Split(match[1], 64);
+    nlohmann::json json = nlohmann::json::parse(s);
+    std::string rpcResult = json["result"];
+    rpcResult = rpcResult.substr(2);
 
-        unsigned int count;
-        std::stringstream ss;
-        ss << std::hex << results[2];
-        ss >> count;
+    std::vector <std::string> results = Split(rpcResult, 64);
 
-        for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
+    for(int i=0; i<10; i++) {
+      std::cout << results[i] << std::endl;
+    }
 
-            int valueIndex = i + count + 1;
+    // Extract number of tuples
+    unsigned int count;
+    std::stringstream ss;
+    ss << std::hex << results[2];
+    ss >> count;
 
-            uint8_t key[32]; // 32 byte key
-            parse32ByteHexString(results[i], key);
+    for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
+        int valueIndex = i + count + 1;
 
-            uint8_t value[32]; // 32 byte value
-            parse32ByteHexString(results[valueIndex], value);
+        uint8_t key[32]; // 32 byte key
+        parse32ByteHexString(results[i], key);
 
-            auto row = new unsigned char[keyLength + valueLength];
+        uint8_t value[32]; // 32 byte value
+        parse32ByteHexString(results[valueIndex], value);
 
-            // Copy key
-            memcpy(&(row[0]), key, keyLength);
+        auto row = new unsigned char[keyLength + valueLength];
 
-            // Copy value
-            memcpy(&(row[keyLength]), value, valueLength);
+        // Copy key
+        memcpy(&(row[0]), key, keyLength);
 
-            ByteData bd = ByteData(row, keyLength + valueLength);
-            tuples.push_back(bd);
-        }
+        // Copy value
+        memcpy(&(row[keyLength]), value, valueLength);
 
-    } else log("no result in response", "tableScan");
-
+        ByteData bd = ByteData(row, keyLength + valueLength);
+        tuples.push_back(bd);
+    }
 }
 
 int Ethereum::dropTable(TableName ) {
@@ -260,7 +258,7 @@ std::string Ethereum::call(RPCparams params, bool setGas) {
   const std::string json = parseParamsToJson(params);
   const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";
   const std::string postData = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(params.id) + ",\"method\":\"" + params.method + "\",\"params\":[{" + json + "}" + quantity_tag + "]}";
-  log("Body: " + postData, "Call");
+  // log("Body: " + postData, "Call");
 
   if (curl) {
     struct curl_slist *headers = NULL;
