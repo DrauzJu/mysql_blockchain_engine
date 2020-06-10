@@ -209,10 +209,6 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
 
     std::vector <std::string> results = Split(rpcResult, 64);
 
-    for(int i=0; i<10; i++) {
-      std::cout << results[i] << std::endl;
-    }
-
     // Extract number of tuples
     unsigned int count;
     std::stringstream ss;
@@ -268,8 +264,7 @@ std::string Ethereum::call(RPCparams params, bool setGas) {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
     curl_easy_perform(curl);
-
-    //std::cout << readBuffer << std::endl;
+    
   } else log("no curl", "Call");
 
   return readBuffer;
