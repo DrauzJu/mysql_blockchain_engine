@@ -48,10 +48,11 @@ static std::string byteArrayToHex(ByteData* data) {
 }
 
 static std::vector<std::string> Split(const std::string& str, int splitLength) {
-    int NumSubstrings = str.length() / splitLength;
+    ulong NumSubstrings = str.length() / splitLength;
     std::vector<std::string> ret;
+    ret.reserve(NumSubstrings);
 
-    for (auto i = 0; i < NumSubstrings; i++) {
+    for (ulong i = 0; i < NumSubstrings; i++) {
         ret.push_back(str.substr(i * splitLength, splitLength));
     }
 
@@ -63,15 +64,15 @@ static std::vector<std::string> Split(const std::string& str, int splitLength) {
     return ret;
 }
 
-static std::string parseParamsToJson(RPCparams params) {
+static std::string parseParamsToJson(const RPCparams& params) {
     std::vector<std::string> els;
-    std::string json = "";
+    std::string json;
 
-    if (!params.from.empty()) els.push_back("\"from\":\"" + params.from + "\"");
-    if (!params.data.empty()) els.push_back("\"data\":\"" + params.data + "\"");
-    if (!params.to.empty()) els.push_back("\"to\":\"" + params.to + "\"");
-    if (!params.gas.empty()) els.push_back("\"gas\":\"" + params.gas + "\"");
-    if (!params.gasPrice.empty()) els.push_back("\"gasPrice\":\"" + params.gasPrice + "\"");
+    if (!params.from.empty()) els.push_back(R"("from":")" + params.from + "\"");
+    if (!params.data.empty()) els.push_back(R"("data":")" + params.data + "\"");
+    if (!params.to.empty()) els.push_back(R"("to":")" + params.to + "\"");
+    if (!params.gas.empty()) els.push_back(R"("gas":")" + params.gas + "\"");
+    if (!params.gasPrice.empty()) els.push_back(R"("gasPrice":")" + params.gasPrice + "\"");
 
     for (std::vector<int>::size_type i = 0; i < els.size(); i++) {
         json += els[i];
@@ -216,7 +217,7 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
     ss >> count;
 
     for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
-        int valueIndex = i + count + 1;
+        std::vector<int>::size_type valueIndex = i + count + 1;
 
         uint8_t key[32]; // 32 byte key
         parse32ByteHexString(results[i], key);
@@ -253,11 +254,11 @@ std::string Ethereum::call(RPCparams params, bool setGas) {
 
   const std::string json = parseParamsToJson(params);
   const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";
-  const std::string postData = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(params.id) + ",\"method\":\"" + params.method + "\",\"params\":[{" + json + "}" + quantity_tag + "]}";
+  const std::string postData = R"({"jsonrpc":"2.0","id":)" + std::to_string(params.id) + R"(,"method":")" + params.method + R"(","params":[{)" + json + "}" + quantity_tag + "]}";
   // log("Body: " + postData, "Call");
 
   if (curl) {
-    struct curl_slist *headers = NULL;
+    struct curl_slist *headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
