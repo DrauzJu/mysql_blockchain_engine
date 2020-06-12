@@ -3,9 +3,6 @@
 #include <iomanip>
 #include <utility>
 
-// todo: implement
-// For document of methods see connector.h
-
 
 void log(const std::string& msg, const std::string& method = "") {
     const std::string m = method.empty() ? "] " : "- " + method + "] ";
@@ -212,9 +209,13 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
 
     // Extract number of tuples
     unsigned int count;
-    std::stringstream ss;
-    ss << std::hex << results[2];
-    ss >> count;
+    if(results.size() > 2) {
+      std::stringstream ss;
+      ss << std::hex << results[2];
+      ss >> count;
+    } else {
+      return;
+    }
 
     for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
         std::vector<int>::size_type valueIndex = i + count + 1;
