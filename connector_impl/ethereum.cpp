@@ -1,8 +1,8 @@
 #include "ethereum.h"
 #include <include/my_base.h>
 #include <iomanip>
+#include <thread>
 #include <utility>
-
 
 void log(const std::string& msg, const std::string& method = "") {
     const std::string m = method.empty() ? "] " : "- " + method + "] ";
@@ -62,8 +62,13 @@ static std::vector<std::string> Split(const std::string& str, int splitLength) {
 }
 
 static std::string parseParamsToJson(const RPCparams& params) {
+
+    if(!params.transactionID.empty()) {
+      return "\"" + params.transactionID + "\""; // only used for eth_getTransactionReceipt
+    }
+
     std::vector<std::string> els;
-    std::string json;
+    std::string json = "{";
 
     if (!params.from.empty()) els.push_back(R"("from":")" + params.from + "\"");
     if (!params.data.empty()) els.push_back(R"("data":")" + params.data + "\"");
@@ -76,7 +81,7 @@ static std::string parseParamsToJson(const RPCparams& params) {
         if (i < els.size() - 1) json += ",";
     }
 
-    return json;
+    return json + "}";
 }
 
 
@@ -148,7 +153,6 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
 
     std::string hexKey = byteArrayToHex(key);
     std::string hexVal = byteArrayToHex(value);
-
 
     RPCparams params;
     params.method = "eth_sendTransaction";
@@ -244,18 +248,40 @@ int Ethereum::dropTable(TableName ) {
   return 0;
 }
 
+std::string Ethereum::checkMiningResult(std::string transactionID) {
+  unsigned short tries = 6;
+  std::string response;
+  RPCparams rpcParams;
+  rpcParams.transactionID = std::move(transactionID);
+  rpcParams.method = "eth_getTransactionByHash";
+  int waitingTime[6] = {20000, 10000, 5000, 3000, 1000, 500};
+
+  while(tries > 0) {
+    std::this_thread::sleep_for (std::chrono::milliseconds (waitingTime[tries-1]));
+    response = call(rpcParams, false);
+    nlohmann::json jsonResponse = nlohmann::json::parse(response);
+
+    if(!(jsonResponse.at("result").at("blockNumber").is_null())) {
+      return response;
+    }
+
+    tries--;
+  }
+
+  throw TransactionConfirmationException();
+}
+
 std::string Ethereum::call(RPCparams params, bool setGas) {
 
-  std::string readBuffer;
+  std::string readBufferCall;
 
   params.from = _fromAddress;
   params.to = _contractAddress;
   if(setGas) params.gas = "0x7A120";
-  // params.gasPrice = "0x4a817c800";
 
   const std::string json = parseParamsToJson(params);
   const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";
-  const std::string postData = R"({"jsonrpc":"2.0","id":)" + std::to_string(params.id) + R"(,"method":")" + params.method + R"(","params":[{)" + json + "}" + quantity_tag + "]}";
+  const std::string postData = R"({"jsonrpc":"2.0","id":)" + std::to_string(params.id) + R"(,"method":")" + params.method + R"(","params":[)" + json + quantity_tag + "]}";
   // log("Body: " + postData, "Call");
 
   if (curl) {
@@ -263,11 +289,23 @@ std::string Ethereum::call(RPCparams params, bool setGas) {
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBufferCall);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
     curl_easy_perform(curl);
     
   } else log("no curl", "Call");
+
+  std::string readBuffer;
+  if(params.method == "eth_sendTransaction") {
+    nlohmann::json jsonResponse = nlohmann::json::parse(readBufferCall);
+    try {
+      readBuffer = checkMiningResult(jsonResponse["result"]);
+    } catch (TransactionConfirmationException& e) {
+      readBuffer = "error: " + std::string(e.what());
+    }
+  } else {
+    readBuffer = readBufferCall;
+  }
 
   return readBuffer;
 }

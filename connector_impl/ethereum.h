@@ -18,9 +18,20 @@ struct RPCparams {
   std::string gas;
   std::string gasPrice;
   std::string quantity_tag;
+  std::string transactionID;
   int id;
   RPCparams() : id(1) {}
 };
+
+
+struct TransactionConfirmationException : public std::exception
+{
+  const char * what () const noexcept override
+  {
+    return "Transaction was not mined!";
+  }
+};
+
 
 class Ethereum : public Connector {
 
@@ -36,6 +47,7 @@ public:
     int dropTable(TableName table) override;
 
     std::string call(const RPCparams params, bool setGas);
+    std::string checkMiningResult(std::string transactionID);
 
 private:
     std::string _contractAddress;
