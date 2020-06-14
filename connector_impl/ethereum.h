@@ -10,6 +10,8 @@
 #include "../connector.h"
 #include "json.hpp"
 
+#define MINE_CHECK_TRIES 6
+
 struct RPCparams {
   std::string from;
   std::string to;
@@ -48,6 +50,7 @@ public:
 
     std::string call(const RPCparams params, bool setGas);
     std::string checkMiningResult(std::string transactionID);
+    void updateMineCheckWaitingTime(int latestDurationMs);
 
 private:
     std::string _contractAddress;
@@ -55,6 +58,8 @@ private:
     std::string _connectionString;
 
     CURL *curl;
+
+    int mineCheckWaitingTime[MINE_CHECK_TRIES] = {40000, 10000, 5000, 3000, 1000, 500};
 };
 
 #endif  // MYSQL_8_0_20_ETHEREUM_H
