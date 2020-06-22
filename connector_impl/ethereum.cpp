@@ -45,6 +45,15 @@ static std::string byteArrayToHex(ByteData* data) {
     return ss.str();
 }
 
+
+static std::string uint32tToHex(uint32_t dec) {
+  std::stringstream ss;
+  ss << std::hex;
+  ss << std::setw(64) << std::setfill('0') << dec;
+
+  return ss.str();
+}
+
 static std::vector<std::string> Split(const std::string& str, int splitLength) {
     ulong NumSubstrings = str.length() / splitLength;
     std::vector<std::string> ret;
@@ -171,6 +180,47 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
         log("failed", "Put");
         return 1;
     }
+}
+
+int Ethereum::putBatch(std::vector<std::unique_ptr<PutOp>>* data) {
+  auto size = data->size();
+
+  std::stringstream dataString;
+  dataString << uint32tToHex(64);
+  dataString << uint32tToHex(96 + 32 * size);
+
+  // All keys
+  dataString << uint32tToHex(size); // number of keys
+  for(ulong i=0; i<size; i++) {
+    auto putOp = std::move(data->at(i));
+    dataString << byteArrayToHex(putOp->key.get());
+    data->at(i) = std::move(putOp);
+  }
+
+  // All values
+  dataString << uint32tToHex(size); // number of values
+  for(ulong i=0; i<size; i++) {
+    auto putOp = std::move(data->at(i));
+    dataString << byteArrayToHex(putOp->value.get());
+    data->at(i) = std::move(putOp);
+  }
+
+  RPCparams params;
+  params.method = "eth_sendTransaction";
+  params.data = "0x9b36675c" + dataString.str();
+  // log("Data: " + params.data, "PutBatch");
+
+  const std::string response = call(params, true);
+  // log("Response: " + response, "PutBatch");
+
+
+  if (response.find("error") == std::string::npos) {
+    log("success", "PutBatch");
+    return 0;
+  } else {
+    log("failed", "PutBatch");
+    return 1;
+  }
 
 }
 
