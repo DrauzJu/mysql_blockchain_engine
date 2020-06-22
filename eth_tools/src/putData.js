@@ -25,6 +25,18 @@ async function put(key, value) {
     });
 }
 
+async function putBatch(keys, values) {
+    const putBatchMethod = kvStore.methods.putBatch(keys, values);
+    // const estimateGas = await putMethod.estimateGas({gas: 1});
+    // console.log("Estimating " + estimateGas + " for put");
+    console.log("Estimated gas for putBatch: " + await putBatchMethod.estimateGas());
+
+    await putBatchMethod.send({
+        from: FROM_ACCOUNT,
+        gas: 200000
+    });
+}
+
 async function tableScan() {
     const tsMethod = kvStore.methods.tableScan();
     const receipt = await tsMethod.call({
