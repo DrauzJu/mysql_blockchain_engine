@@ -45,8 +45,12 @@ contract KVStore {
     {
         for (uint i = 0; i < keys.length; i++) {
             Value memory v = Value(block.number,values[i]);
+
+            if(data[keys[i]].blocknumber == 0) {
+                keyList.push(keys[i]);
+            }
+
             data[keys[i]] = v;
-            keyList.push(keys[i]);
         }
     }
 
