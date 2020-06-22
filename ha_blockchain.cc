@@ -131,6 +131,8 @@ static int blockchain_init_func(void *p) {
   blockchain_hton->create = blockchain_create_handler;
   blockchain_hton->flags = HTON_CAN_RECREATE;
   blockchain_hton->is_supported_system_table = blockchain_is_supported_system_table;
+  blockchain_hton->commit = ha_blockchain::bc_commit;
+  blockchain_hton->rollback = ha_blockchain::bc_rollback;
 
   // Parse configuration
   if(config_type == ETHEREUM) {
@@ -151,10 +153,7 @@ std::unordered_map<std::string, std::string>* ha_blockchain::tableContractInfo;
 ha_blockchain::ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg)
     : handler(hton, table_arg) {}
 
-ha_blockchain::~ha_blockchain() {
-  // connector: use of smart pointer
-  // tableScanData: gets deconstructed by std::vector
-}
+ha_blockchain::~ha_blockchain() = default;
 
 /*
   List of all system tables specific to the SE.
@@ -241,7 +240,7 @@ int ha_blockchain::open(const char *, int, uint, const dd::Table *) {
   sql_base.cc, sql_select.cc and table.cc
 */
 
-int ha_blockchain::close(void) {
+int ha_blockchain::close() {
   DBUG_TRACE;
   return 0;
 }
@@ -278,13 +277,35 @@ int ha_blockchain::close(void) {
 
 int ha_blockchain::write_row(uchar *buf) {
   DBUG_TRACE;
-  invalidateTableScanData();
+  invalidate_table_scan_data();
 
   ByteData key, value;
-  extractKey(buf, &key);
-  extractValue(buf, key.dataSize, &value);
+  extract_key(buf, &key);
+  extract_value(buf, key.dataSize, &value);
 
-  return connector->put(table->alias, &key, &value);
+  if(thd_test_options(ha_thd(), (OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN ))) {
+    log("Detected a transaction during write --> only put in buffer"); //DEBUG
+    // copy data in heap and store pointer in blockchain_tx object
+
+    auto putOp = std::make_unique<PutOp>();
+
+    putOp->value->data = (unsigned char *) malloc(value.dataSize);
+    memcpy(putOp->value->data, value.data, value.dataSize);
+    putOp->value->dataSize = value.dataSize;
+
+    putOp->key->data = (unsigned char *) malloc(key.dataSize);
+    memcpy(putOp->key->data, key.data, key.dataSize);
+    putOp->key->dataSize = key.dataSize;
+
+    auto bc_thd_data = get_bc_ha_data(ha_thd());
+    bc_thd_data->tx->addPut(std::move(putOp));
+
+    return 0;
+  } else {
+    // else (auto-commit): don't copy any data, just use buf to directly store data
+    log("Detected no transaction during write --> execute directly"); //DEBUG
+    return connector->put(table->alias, &key, &value);
+  }
 }
 
 /**
@@ -314,8 +335,8 @@ int ha_blockchain::update_row(const uchar *old_data, uchar *new_data) {
   DBUG_TRACE;
 
   ByteData key_old, key_new;
-  extractKey(const_cast<uchar *>(old_data), &key_old);
-  extractKey(new_data, &key_new);
+  extract_key(const_cast<uchar *>(old_data), &key_old);
+  extract_key(new_data, &key_new);
 
   // Check if keys are still the same
   if(key_old.dataSize == key_new.dataSize) {
@@ -353,9 +374,26 @@ int ha_blockchain::delete_row(const uchar *buf) {
   DBUG_TRACE;
   ByteData key;
 
-  invalidateTableScanData();
-  extractKey(const_cast<uchar *>(buf), &key);
-  return connector->remove(table->alias, &key);
+  invalidate_table_scan_data();
+  extract_key(const_cast<uchar *>(buf), &key);
+
+  if(thd_test_options(ha_thd(), (OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN ))) {
+    // copy data in heap and store pointer in blockchain_tx object
+
+    auto removeOp = std::make_unique<RemoveOp>();
+
+    removeOp->key->data = (unsigned char *) malloc(key.dataSize);
+    memcpy(removeOp->key->data, key.data, key.dataSize);
+    removeOp->key->dataSize = key.dataSize;
+
+    auto bc_thd_data = get_bc_ha_data(ha_thd());
+    bc_thd_data->tx->addRemove(std::move(removeOp));
+
+    return 0;
+  } else {
+    // else (auto-commit): don't copy any data, just use buf to directly store data
+    return connector->remove(table->alias, &key);
+  }
 }
 
 /**
@@ -672,9 +710,8 @@ int ha_blockchain::delete_all_rows() {
   the section "locking functions for mysql" in lock.cc;
   copy_data_between_tables() in sql_table.cc.
 */
-int ha_blockchain::external_lock(THD *, int) {
-  DBUG_TRACE;
-  return 0;
+int ha_blockchain::external_lock(THD *thd, int) {
+  return start_transaction(thd);
 }
 
 /**
@@ -763,7 +800,7 @@ int ha_blockchain::delete_table(const char *name, const dd::Table *) {
 int ha_blockchain::rename_table(const char *, const char *, const dd::Table *,
                              dd::Table *) {
   DBUG_TRACE;
-  return HA_ERR_WRONG_COMMAND; // todo: implement
+  return HA_ERR_WRONG_COMMAND;
 }
 
 /**
@@ -814,6 +851,70 @@ int ha_blockchain::create(const char *name, TABLE *, HA_CREATE_INFO *,
   return 0;
 }
 
+
+int ha_blockchain::start_stmt(THD *thd, thr_lock_type) {
+  log("In start_stmt"); // DEBUG
+  return start_transaction(thd);
+}
+
+int ha_blockchain::start_transaction(THD *thd) {
+  // Check if transaction needs to be created
+  if(!thd_test_options(thd, (OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN ))) {
+    return 0;
+  }
+
+  auto bc_ha_data = get_bc_ha_data(ha_thd());
+
+  if(bc_ha_data->tx == nullptr) {
+    bc_ha_data->tx = std::make_unique<blockchain_tx>();
+    log("Creating transaction and registering"); // DEBUG
+
+    // register transaction in MySQL core
+    trans_register_ha(thd, true, blockchain_hton, nullptr);
+  }
+
+  return 0;
+}
+
+int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
+
+  if(!commit_trx) {
+    return HA_ERR_WRONG_COMMAND;
+  }
+
+  std::cout << "[BLOCKCHAIN - static] " << "In bc_commit" << std::endl; // DEBUG
+
+  auto connector = get_bc_ha_data(thd)->connector;
+  auto tx = std::move(get_bc_ha_data(thd)->tx);
+
+  connector->putBatch(tx->getPutOpearations());
+
+  for(auto & i : *tx->getRemoveOpearations()) {
+    auto removeOp = std::move(i);
+    connector->remove(removeOp->table, removeOp->key.get());
+  }
+
+  // free tx --> done automatically since leaves scope
+  return 0;
+}
+
+int ha_blockchain::bc_rollback(handlerton *, THD *thd, bool all) {
+
+  if(!all) {
+    return HA_ERR_WRONG_COMMAND;
+  }
+
+  auto tx = std::move(get_bc_ha_data(thd)->tx);
+  if(tx == nullptr) {
+    return HA_ERR_INTERNAL_ERROR;
+  }
+
+  // free tx --> done automatically since leaves scope
+  return 0;
+}
+
+/* Custom functions */
+
 void ha_blockchain::log(const std::string& msg) {
   std::cout << "[BLOCKCHAIN - " << table->alias << "] " << msg << std::endl;
 }
@@ -821,6 +922,9 @@ void ha_blockchain::log(const std::string& msg) {
 int ha_blockchain::find_current_row(uchar *buf) {
   return find_row(current_position, buf);
 }
+
+// todo: also include data from transaction buffer (Problem: how to handle updates?!)
+// alternative: define that a transaction can not even read its own updates (when not committed)
 
 int ha_blockchain::find_row(int index, uchar *buf) {
   ByteData data;
@@ -854,7 +958,7 @@ std::unordered_map<std::string, std::string>* ha_blockchain::parseEthContractCon
   return map;
 }
 
-void ha_blockchain::extractKey(uchar *buf, ByteData* key) {
+void ha_blockchain::extract_key(uchar *buf, ByteData* key) {
   uint initial_null_bytes = table->s->null_bytes;
 
   // first field of table is key field
@@ -864,7 +968,7 @@ void ha_blockchain::extractKey(uchar *buf, ByteData* key) {
   key->dataSize = key_field->pack_length();
 }
 
-void ha_blockchain::extractValue(uchar *buf, ulong key_size, ByteData* value) {
+void ha_blockchain::extract_value(uchar *buf, ulong key_size, ByteData* value) {
   uint initial_null_bytes = table->s->null_bytes;
 
   value->data = &(buf[initial_null_bytes + key_size]);
@@ -872,7 +976,7 @@ void ha_blockchain::extractValue(uchar *buf, ulong key_size, ByteData* value) {
 }
 
 // don't just delete tableScanData, might be still in use during a
-void ha_blockchain::invalidateTableScanData()  {
+void ha_blockchain::invalidate_table_scan_data()  {
   tableScanDataDeleteFlag = true;
 }
 
@@ -886,7 +990,7 @@ void ha_blockchain::findConnector(const char* tableName) {
   switch(config_type) {
     case 0: {
       auto searchAddress = ha_blockchain::tableContractInfo->find(std::string(tableName));
-      std::string contractAddress = "";
+      std::string contractAddress;
       if(searchAddress != ha_blockchain::tableContractInfo->end()) {
         contractAddress = searchAddress->second;
       }
@@ -903,7 +1007,26 @@ void ha_blockchain::findConnector(const char* tableName) {
 
     default: std::cout << "Error! Unknown blockchain type" << std::endl;
   }
+
+  // save in THD data
+  if(connector != nullptr) {
+    auto bc_ha_data = get_bc_ha_data(ha_thd());
+    bc_ha_data->connector = connector.get();
+    log("Stored connector in HA_DATA");
+  }
 }
+
+bc_ha_data_t *ha_blockchain::get_bc_ha_data(THD* thd) {
+  auto ha_data = thd->get_ha_data(blockchain_hton->slot);
+  auto bc_ha_data = static_cast<bc_ha_data_t *>(ha_data->ha_ptr);
+  if(bc_ha_data == nullptr) {
+    ha_data->ha_ptr = new bc_ha_data_t;
+    return static_cast<bc_ha_data_t *>(ha_data->ha_ptr);
+  } else {
+    return bc_ha_data;
+  }
+}
+
 
 struct st_mysql_storage_engine blockchain_storage_engine = {
     MYSQL_HANDLERTON_INTERFACE_VERSION};
