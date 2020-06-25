@@ -47,11 +47,19 @@
 #include "thr_lock.h"    /* THR_LOCK, THR_LOCK_DATA */
 
 #include "connector.h"
+#include "blockchain_tx.h"
 
 
 enum BC_TYPE {
   ETHEREUM = 0
 };
+
+
+typedef struct bc_ha_data_t {
+  std::unique_ptr<blockchain_tx> tx;
+  Connector* connector;
+} bc_ha_data_t;
+
 
 /** @brief
   Class definition for the storage engine
@@ -241,6 +249,20 @@ class ha_blockchain : public handler {
   */
   int index_last(uchar *buf);
 
+  /** MySQL calls this function at the start of each SQL statement inside LOCK
+  TABLES. Inside LOCK TABLES the "::external_lock" method does not work to mark
+  SQL statement borders. Note also a special case: if a temporary table is
+  created inside LOCK TABLES, MySQL has not called external_lock() at all on
+  that table.
+  MySQL-5.0 also calls this before each statement in an execution of a stored
+  procedure. To make the execution more deterministic for binlogging, MySQL-5.0
+  locks all tables involved in a stored procedure with full explicit table locks
+  (thd_in_lock_tables(thd) holds in store_lock()) before executing the procedure.
+  @param[in]	thd		handle to the user thread
+  @param[in]	lock_type	lock type
+  @return 0 or error code */
+  int start_stmt(THD *thd, thr_lock_type lock_type);
+
   /** @brief
    * Logging helper
    */
@@ -251,12 +273,19 @@ class ha_blockchain : public handler {
   int find_current_row(uchar *buf);
   int find_row(int index, uchar *buf);
 
-  void invalidateTableScanData();
+  void invalidate_table_scan_data();
 
-  void extractKey(uchar* buf, ByteData* key);
-  void extractValue(uchar* buf, ulong key_size, ByteData* value);
+  void extract_key(uchar* buf, ByteData* key);
+  void extract_value(uchar* buf, ulong key_size, ByteData* value);
 
   static std::unordered_map<std::string, std::string>* parseEthContractConfig(char* config);
+
+  static bc_ha_data_t* get_bc_ha_data(THD* thd);
+
+  /** Commits a transaction or marks an SQL statement ended.*/
+  int start_transaction(THD *thd);
+  static int bc_commit(handlerton *hton, THD *thd, bool commit_trx);
+  static int bc_rollback(handlerton *hton, THD *thd, bool all);
 
   /** @brief
     Unlike index_init(), rnd_init() can be called two consecutive times

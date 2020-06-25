@@ -4,32 +4,12 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
+#include "blockchain_tx.h"
 
 /*
  * Interface definition to be used by storage engine to communicate with
  * concrete blockchain technology handler, like Ethereum
- *
- * Basic methods:
- *    - get(key)
- *    - put(key, value)
  */
-
-using TableName = const char*;
-
-class ByteData {
- public:
-  ByteData() {}
-  ByteData(unsigned char *p_data, uint8_t p_dataSize) {
-    data = p_data;
-    dataSize = p_dataSize;
-  }
-  ~ByteData() {
-    // delete data; // todo!
-  }
-
-  unsigned char *data;
-  uint8_t dataSize;
-};
 
 class Connector {
  public:
@@ -45,6 +25,11 @@ class Connector {
    * returns 0 on success, 1 on failure
    */
   virtual int put(TableName table, ByteData* key, ByteData* value) = 0;
+
+  /*
+   * returns 0 on success, 1 on failure
+   */
+  virtual int putBatch(std::vector<std::unique_ptr<PutOp>> * data) = 0;
 
   /*
    * returns 0 on success, 1 on failure
