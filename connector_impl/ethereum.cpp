@@ -125,7 +125,7 @@ int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) 
   params.quantity_tag = "latest";
   // log("Data: " + params.data, "Get");
 
-  const std::string response = call(params, true);
+  const std::string response = call(params, false);
   // log("Response: " + response, "Get");
 
 
