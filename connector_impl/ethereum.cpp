@@ -99,10 +99,11 @@ static std::string parseParamsToJson(const RPCparams& params) {
 
 
 Ethereum::Ethereum(std::string connectionString,
-                   std::string contractAddress, std::string fromAddress) {
+                   std::string contractAddress, std::string fromAddress, int maxWaitingTime) {
     _contractAddress = std::move(contractAddress);
     _fromAddress = std::move(fromAddress);
     _connectionString = std::move(connectionString);
+    this->maxWaitingTime = maxWaitingTime;
 
     curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L); // Problem: ganache default keep-alive timeout is only 5s

@@ -117,6 +117,7 @@ static int config_type;
 static char* config_connection;
 static char* config_eth_contracts;
 static char* config_eth_from;
+static int config_eth_max_waiting_time;
 
 /* Interface to mysqld, to check system tables supported by SE */
 static bool blockchain_is_supported_system_table(const char *db,
@@ -999,7 +1000,8 @@ void ha_blockchain::findConnector(const char* tableName) {
           new Ethereum(
               std::string(config_connection),
               contractAddress,
-              std::string(config_eth_from))
+              std::string(config_eth_from),
+              config_eth_max_waiting_time)
           );
 
       break;
@@ -1047,11 +1049,16 @@ static MYSQL_SYSVAR_STR(bc_eth_from, config_eth_from, PLUGIN_VAR_RQCMDARG | PLUG
                         "Ethereum FROM address", nullptr, nullptr,
                         nullptr);
 
+static MYSQL_SYSVAR_INT(bc_eth_max_waiting_time, config_eth_max_waiting_time, 0,
+                        "Ethereum max. time to wait for transaction mined", nullptr, nullptr, 32,
+                        16, 300, 0);
+
 static SYS_VAR *blockchain_system_variables[] = {
     MYSQL_SYSVAR(bc_type), // blockchain type: 0 - ethereum
     MYSQL_SYSVAR(bc_connection), // blockchain connection string (e.g. for Ethereum: http://127.0.0.1:8545)
     MYSQL_SYSVAR(bc_eth_contracts), // Concept: one contract per table, format: tableName1:contractAddress,tableName2:contractAddress,...
     MYSQL_SYSVAR(bc_eth_from),
+    MYSQL_SYSVAR(bc_eth_max_waiting_time),
     nullptr
 };
 

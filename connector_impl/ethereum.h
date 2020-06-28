@@ -39,7 +39,7 @@ class Ethereum : public Connector {
 
 public:
     explicit Ethereum(std::string connectionString,
-                   std::string contractAddress, std::string fromAddress);
+                   std::string contractAddress, std::string fromAddress, int maxWaitingTime);
     ~Ethereum() override;
 
     int get(TableName table, ByteData* key, unsigned char* buf, int value_size) override;
@@ -57,6 +57,7 @@ private:
     std::string _contractAddress;
     std::string _fromAddress;
     std::string _connectionString;
+    int maxWaitingTime;
 
     CURL *curl;
 
