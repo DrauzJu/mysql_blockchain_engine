@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
-#include "blockchain_tx.h"
+#include "blockchain_table_tx.h"
 
 /*
  * Interface definition to be used by storage engine to communicate with
@@ -29,7 +29,7 @@ class Connector {
   /*
    * returns 0 on success, 1 on failure
    */
-  virtual int putBatch(std::vector<std::unique_ptr<PutOp>> * data) = 0;
+  virtual int putBatch(std::vector<PutOp> * data) = 0;
 
   /*
    * returns 0 on success, 1 on failure
@@ -40,7 +40,7 @@ class Connector {
    * Do a table scan, puts tuples in provided vector object (key+value concatenated)
    * --> faster than getting each KV-pair in an own transaction
    */
-  virtual void tableScan(TableName table, std::vector<ByteData> &tuples, size_t keyLength, size_t valueLength) = 0;
+  virtual void tableScan(TableName table, std::vector<ManagedByteData> &tuples, size_t keyLength, size_t valueLength) = 0;
 
   /*
    * Drop table

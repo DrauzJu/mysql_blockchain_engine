@@ -21,7 +21,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 SET(BLOCKCHAIN_PLUGIN_DYNAMIC "ha_blockchain")
-SET(BLOCKCHAIN_SOURCES ha_blockchain.cc connector_impl/ethereum.cpp blockchain_tx.cpp)
+SET(BLOCKCHAIN_SOURCES ha_blockchain.cc connector_impl/ethereum.cpp blockchain_table_tx.cpp)
 ADD_DEFINITIONS(-DMYSQL_SERVER)
 
 # FIND_PACKAGE(Boost REQUIRED)

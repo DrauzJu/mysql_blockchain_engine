@@ -44,9 +44,9 @@ public:
 
     int get(TableName table, ByteData* key, unsigned char* buf, int value_size) override;
     int put(TableName table, ByteData* key, ByteData* value) override;
-    int putBatch(std::vector<std::unique_ptr<PutOp>>* data) override;
+    int putBatch(std::vector<PutOp>* data) override;
     int remove(TableName table, ByteData *key) override;
-    void tableScan(TableName table, std::vector<ByteData> &tuples, size_t keyLength, size_t valueLength) override;
+    void tableScan(TableName table, std::vector<ManagedByteData> &tuples, size_t keyLength, size_t valueLength) override;
     int dropTable(TableName table) override;
 
     std::string call(const RPCparams params, bool setGas);

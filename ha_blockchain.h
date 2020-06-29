@@ -39,6 +39,7 @@
 */
 
 #include <sys/types.h>
+#include <mutex>
 
 #include "my_base.h" /* ha_rows */
 #include "my_compiler.h"
@@ -46,20 +47,8 @@
 #include "sql/handler.h" /* handler */
 #include "thr_lock.h"    /* THR_LOCK, THR_LOCK_DATA */
 
+#include "blockchain_table_tx.h"
 #include "connector.h"
-#include "blockchain_tx.h"
-
-
-enum BC_TYPE {
-  ETHEREUM = 0
-};
-
-
-typedef struct bc_ha_data_t {
-  std::unique_ptr<blockchain_tx> tx;
-  Connector* connector;
-} bc_ha_data_t;
-
 
 /** @brief
   Class definition for the storage engine
@@ -67,8 +56,8 @@ typedef struct bc_ha_data_t {
 class ha_blockchain : public handler {
   int current_position; // current position during table scan
   std::unique_ptr<Connector> connector;
-  std::vector<ByteData> tableScanData;
-  bool tableScanDataDeleteFlag = false;
+  std::vector<ManagedByteData> rndTableScanData;
+  static std::mutex ha_data_create_mtx;
 
  public:
   // Maps table name to contract address
@@ -280,7 +269,11 @@ class ha_blockchain : public handler {
 
   static std::unordered_map<std::string, std::string>* parseEthContractConfig(char* config);
 
-  static bc_ha_data_t* get_bc_ha_data(THD* thd);
+  static bc_ha_data_table_t* ha_data_get(THD* thd, TableName table);
+  static ha_data_map* ha_data_get_all(THD* thd);
+
+  bool inTransaction();
+  bool useTableScanCache();
 
   /** Commits a transaction or marks an SQL statement ended.*/
   int start_transaction(THD *thd);

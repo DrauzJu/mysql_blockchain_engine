@@ -183,7 +183,7 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
     }
 }
 
-int Ethereum::putBatch(std::vector<std::unique_ptr<PutOp>>* data) {
+int Ethereum::putBatch(std::vector<PutOp>* data) {
   auto size = data->size();
 
   std::stringstream dataString;
@@ -193,17 +193,17 @@ int Ethereum::putBatch(std::vector<std::unique_ptr<PutOp>>* data) {
   // All keys
   dataString << uint32tToHex(size); // number of keys
   for(ulong i=0; i<size; i++) {
-    auto putOp = std::move(data->at(i));
-    dataString << byteArrayToHex(putOp->key.get());
-    data->at(i) = std::move(putOp);
+    auto& putOp = data->at(i);
+    auto bd = ByteData(putOp.key.data.get(), putOp.key.dataSize);
+    dataString << byteArrayToHex(&bd);
   }
 
   // All values
   dataString << uint32tToHex(size); // number of values
   for(ulong i=0; i<size; i++) {
-    auto putOp = std::move(data->at(i));
-    dataString << byteArrayToHex(putOp->value.get());
-    data->at(i) = std::move(putOp);
+    auto& putOp = data->at(i);
+    auto bd = ByteData(putOp.value.data.get(), putOp.value.dataSize);
+    dataString << byteArrayToHex(&bd);
   }
 
   RPCparams params;
@@ -245,10 +245,9 @@ int Ethereum::remove(TableName, ByteData *key) {
         log("failed", "Remove");
         return 1;
     }
-
 }
 
-void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLength, size_t valueLength) {
+void Ethereum::tableScan(TableName, std::vector<ManagedByteData>& tuples, size_t keyLength, size_t valueLength) {
 
     RPCparams params;
     params.method = "eth_call";
@@ -282,16 +281,15 @@ void Ethereum::tableScan(TableName, std::vector<ByteData>& tuples, size_t keyLen
         uint8_t value[32]; // 32 byte value
         parse32ByteHexString(results[valueIndex], value);
 
-        auto row = new unsigned char[keyLength + valueLength];
+        auto row = std::make_unique<unsigned char[]>(keyLength + valueLength);
 
         // Copy key
-        memcpy(&(row[0]), key, keyLength);
+        memcpy(row.get(), key, keyLength);
 
         // Copy value
         memcpy(&(row[keyLength]), value, valueLength);
 
-        ByteData bd = ByteData(row, keyLength + valueLength);
-        tuples.push_back(bd);
+        tuples.emplace_back(row, keyLength + valueLength);
     }
 }
 

@@ -1,7 +1,29 @@
 #ifndef MYSQL_TYPES_H
 #define MYSQL_TYPES_H
 
+#include <iostream>
+#include <unordered_map>
+
 using TableName = const char*;
+
+class Connector;
+class blockchain_table_tx;
+
+enum BC_TYPE {
+  ETHEREUM = 0
+};
+
+enum BC_ISOLATION_LEVEL {
+  READ_UNCOMMITTED = 0,
+  READ_COMMITTED = 1
+};
+
+typedef struct bc_ha_data_table_t {
+  std::unique_ptr<blockchain_table_tx> tx;
+  Connector* connector;
+} bc_ha_data_table_t;
+
+using ha_data_map = std::unordered_map<TableName, std::unique_ptr<bc_ha_data_table_t>>;
 
 class ByteData {
  public:
@@ -15,36 +37,34 @@ class ByteData {
   uint8_t dataSize;
 };
 
+/*
+ * Should be used if data was allocated by storage engine (and not by MySQL core)
+ * --> frees the data!
+ */
+class ManagedByteData {
+ public:
+  ManagedByteData() {}
+  ManagedByteData(std::unique_ptr<unsigned char[]>& p_data, uint8_t p_dataSize) {
+    data = std::move(p_data);
+    dataSize = p_dataSize;
+  }
+
+  std::unique_ptr<unsigned char[]> data;
+  uint8_t dataSize;
+};
+
 class PutOp {
  public:
   TableName table;
-  std::unique_ptr<ByteData> value;
-  std::unique_ptr<ByteData> key;
-
-  PutOp() {
-    value = std::make_unique<ByteData>();
-    key = std::make_unique<ByteData>();
-  }
-
-  ~PutOp() {
-    free(key->data);
-    free(value->data);
-  }
+  ManagedByteData value;
+  ManagedByteData key;
 };
 
 
 class RemoveOp {
  public:
   TableName table;
-  std::unique_ptr<ByteData> key;
-
-  RemoveOp() {
-    key = std::make_unique<ByteData>();
-  }
-
-  ~RemoveOp() {
-    free(key->data);
-  }
+  ManagedByteData key;
 };
 
 #endif  // MYSQL_TYPES_H
