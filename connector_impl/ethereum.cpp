@@ -336,42 +336,26 @@ std::string Ethereum::checkMiningResult(std::string transactionID) {
   rpcParams.transactionID = std::move(transactionID);
   rpcParams.method = "eth_getTransactionByHash";
 
-  auto start = std::chrono::steady_clock::now();
-
   while(tries > 0) {
-    std::this_thread::sleep_for (std::chrono::milliseconds (mineCheckWaitingTime[tries-1]));
+    std::this_thread::sleep_for (std::chrono::milliseconds (this->maxWaitingTime));
     response = call(rpcParams, false);
     nlohmann::json jsonResponse = nlohmann::json::parse(response);
 
     if(!(jsonResponse.at("result").at("blockNumber").is_null())) {
-      auto end = std::chrono::steady_clock::now();
-      updateMineCheckWaitingTime(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
       return response;
     }
 
     tries--;
   }
 
-  auto end = std::chrono::steady_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-  updateMineCheckWaitingTime(duration);
 
   std::stringstream msg;
-  msg << "Failed to get transaction block number after " << duration << " ms";
+  msg << "Failed to get transaction block number after " << this->maxWaitingTime << " ms";
   log(msg.str());
 
   throw TransactionConfirmationException();
 }
 
-void Ethereum::updateMineCheckWaitingTime(int latestDurationMs) {
-  // calculate scale factor by comparing latestDurationMs with mineCheckWaitingTime[3]
-  // update all values by scale
-  double scale = latestDurationMs / ((double) mineCheckWaitingTime[3]);
-
-  for(int& i : mineCheckWaitingTime) {
-    i = std::ceil(i * scale);
-  }
-}
 
 std::string Ethereum::call(RPCparams params, bool setGas) {
 
