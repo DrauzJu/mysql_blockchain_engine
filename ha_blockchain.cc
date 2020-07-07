@@ -621,7 +621,7 @@ void ha_blockchain::position(const uchar *) {
 int ha_blockchain::rnd_pos(uchar *buf, uchar *pos) {
   DBUG_TRACE;
 
-  int position = my_get_ptr(pos, ref_length);
+  auto position = my_get_ptr(pos, ref_length);
   return find_row(position, buf);
 }
 
@@ -952,18 +952,23 @@ int ha_blockchain::find_current_row(uchar *buf) {
   return find_row(current_position, buf);
 }
 
-int ha_blockchain::find_row(int index, uchar *buf) {
+int ha_blockchain::find_row(my_off_t index, uchar *buf) {
 
   ByteData data{};
+  std::unique_ptr<ManagedByteData> tempBuffer;
 
   if(useTableScanCache()) {
     auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
+    if(index >= tx->tableScanData.size()) {
+      return HA_ERR_END_OF_FILE;
+    }
+
     auto pos = tx->tableScanData.begin();
     std::advance(pos, index);
     auto* key = &(pos->first);
     auto* value = &(pos->second);
-    // todo here!
-    // data = ByteData
+    tempBuffer = std::make_unique<ManagedByteData>(key, value);
+    data = ByteData(tempBuffer->data->data(), tempBuffer->data->size());
   } else {
     try {
       ManagedByteData& mData = rndTableScanData.at(index);

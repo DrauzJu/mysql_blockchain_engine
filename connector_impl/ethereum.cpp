@@ -301,9 +301,14 @@ std::vector<std::string> Ethereum::tableScanCall() {
 
   const std::string s = call(params, false);
 
-  nlohmann::json json = nlohmann::json::parse(s);
-  std::string rpcResult = json["result"];
-  rpcResult = rpcResult.substr(2);
+  std::string rpcResult;
+  try {
+    auto json = nlohmann::json::parse(s);
+    rpcResult = json["result"];
+    rpcResult = rpcResult.substr(2);
+  } catch (std::exception e) {
+    std::cerr << "[BLOCKCHAIN] - Can not parse TableScan response!" << std::endl;
+  }
 
   return Split(rpcResult, 64);
 }

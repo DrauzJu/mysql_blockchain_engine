@@ -54,7 +54,7 @@
   Class definition for the storage engine
 */
 class ha_blockchain : public handler {
-  int current_position; // current position during table scan
+  my_off_t current_position; // current position during table scan
   std::unique_ptr<Connector> connector;
   std::vector<ManagedByteData> rndTableScanData;
   static std::mutex ha_data_create_mtx;
@@ -260,7 +260,7 @@ class ha_blockchain : public handler {
   void findConnector(const char* tableName);
 
   int find_current_row(uchar *buf);
-  int find_row(int index, uchar *buf);
+  int find_row(my_off_t index, uchar *buf);
 
   void extract_key(uchar* buf, ByteData* key);
   void extract_value(uchar* buf, ulong key_size, ByteData* value);
