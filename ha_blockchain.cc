@@ -290,9 +290,8 @@ int ha_blockchain::close() {
 
 int ha_blockchain::write_row(uchar *buf) {
   DBUG_TRACE;
-  invalidate_table_scan_data();
 
-  ByteData key, value;
+  ByteData key{}, value{};
   extract_key(buf, &key);
   extract_value(buf, key.dataSize, &value);
 
@@ -301,14 +300,10 @@ int ha_blockchain::write_row(uchar *buf) {
     // copy data in heap and store pointer in blockchain_tx object
 
     PutOp putOp;
-
-    putOp.value.data = std::make_unique<unsigned char[]>(value.dataSize);
-    memcpy(putOp.value.data.get(), value.data, value.dataSize);
-    putOp.value.dataSize = value.dataSize;
-
-    putOp.key.data = std::make_unique<unsigned char[]>(key.dataSize);
-    memcpy(putOp.key.data.get(), key.data, key.dataSize);
-    putOp.key.dataSize = key.dataSize;
+    putOp.value = ManagedByteData(value.dataSize);
+    memcpy(putOp.value.data->data(), value.data, value.dataSize);
+    putOp.key = ManagedByteData(key.dataSize);
+    memcpy(putOp.key.data->data(), key.data, key.dataSize);
 
     auto bc_thd_data = ha_data_get(ha_thd(), table->alias);
     bc_thd_data->tx->addPut(std::move(putOp));
@@ -385,9 +380,7 @@ int ha_blockchain::update_row(const uchar *old_data, uchar *new_data) {
 
 int ha_blockchain::delete_row(const uchar *buf) {
   DBUG_TRACE;
-  ByteData key;
-
-  invalidate_table_scan_data();
+  ByteData key{};
   extract_key(const_cast<uchar *>(buf), &key);
 
   if(inTransaction()) {
@@ -395,12 +388,16 @@ int ha_blockchain::delete_row(const uchar *buf) {
 
     RemoveOp removeOp;
 
-    removeOp.key.data = std::make_unique<unsigned char[]>(key.dataSize);
-    memcpy(removeOp.key.data.get(), key.data, key.dataSize);
-    removeOp.key.dataSize = key.dataSize;
+    removeOp.key = ManagedByteData(key.dataSize);
+    memcpy(removeOp.key.data->data(), key.data, key.dataSize);
 
     auto bc_thd_data = ha_data_get(ha_thd(), table->alias);
-    bc_thd_data->tx->addRemove(std::move(removeOp));
+    if(useTableScanCache()) {
+      // allows to further iterate over cache without invalidating iterator pointers
+      bc_thd_data->tx->addPendingRemove(std::move(removeOp));
+    } else {
+      bc_thd_data->tx->addRemove(std::move(removeOp));
+    }
 
     return 0;
   } else {
@@ -535,10 +532,11 @@ int ha_blockchain::rnd_init(bool) {
   if(useTableScanCache()) {
     auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
     if(tx->tableScanData.empty()) {
-      connector->tableScan(table->alias, tx->tableScanData, keyLength, valueLength);
+      connector->tableScanToMap(table->alias, tx->tableScanData, keyLength, valueLength);
+      tx->reapplyPendingOperations();
     }
   } else {
-    connector->tableScan(table->alias, rndTableScanData, keyLength, valueLength);
+    connector->tableScanToVec(table->alias, rndTableScanData, keyLength, valueLength);
   }
 
   DBUG_TRACE;
@@ -548,13 +546,11 @@ int ha_blockchain::rnd_init(bool) {
 int ha_blockchain::rnd_end() {
   DBUG_TRACE;
 
-  if(useTableScanCache()) {
-    auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
-    if(tx->tableScanDataDeleteFlag) {
-      tx->tableScanData.clear();
-    }
-  } else {
+  if(!useTableScanCache()) {
     rndTableScanData.clear();
+  } else {
+    auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
+    tx->applyPendingRemoveOps();
   }
 
   return 0;
@@ -921,9 +917,9 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
     }
 
     for(auto& i : *tx->getRemoveOperations()) {
-      ByteData bd(i.key.data.get(), i.key.dataSize);
+      ByteData bd(i.key.data->data(), i.key.data->size());
       if(connector->remove(i.table, &bd) != 0) {
-        std::cerr << "PutBatch of commit failed, DATA INCONSISTENCY may occur!";
+        std::cerr << "Remove of commit failed, DATA INCONSISTENCY may occur!";
       }
     }
   }
@@ -958,20 +954,23 @@ int ha_blockchain::find_current_row(uchar *buf) {
 
 int ha_blockchain::find_row(int index, uchar *buf) {
 
-  std::vector<ManagedByteData>* tsData;
+  ByteData data{};
+
   if(useTableScanCache()) {
     auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
-    tsData = &tx->tableScanData;
+    auto pos = tx->tableScanData.begin();
+    std::advance(pos, index);
+    auto* key = &(pos->first);
+    auto* value = &(pos->second);
+    // todo here!
+    // data = ByteData
   } else {
-    tsData = &rndTableScanData;
-  }
-
-  ByteData data;
-  try {
-    auto mData = &(tsData->at(index));
-    data = ByteData(mData->data.get(), mData->dataSize);
-  } catch (const std::out_of_range&) {
-    return HA_ERR_END_OF_FILE;
+    try {
+      ManagedByteData& mData = rndTableScanData.at(index);
+      data = ByteData(mData.data->data(), mData.data->size());
+    } catch (const std::out_of_range&) {
+      return HA_ERR_END_OF_FILE;
+    }
   }
 
   // set required zero bits
@@ -1013,14 +1012,6 @@ void ha_blockchain::extract_value(uchar *buf, ulong key_size, ByteData* value) {
 
   value->data = &(buf[initial_null_bytes + key_size]);
   value->dataSize = table->s->reclength - key_size - initial_null_bytes;
-}
-
-// don't just delete tableScanData, might be still in use during a
-void ha_blockchain::invalidate_table_scan_data()  {
-  if(useTableScanCache()) {
-    auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
-    tx->tableScanDataDeleteFlag = true;
-  }
 }
 
 // Must be a separate function since has to be called at a different time depending on the operation

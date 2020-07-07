@@ -262,8 +262,6 @@ class ha_blockchain : public handler {
   int find_current_row(uchar *buf);
   int find_row(int index, uchar *buf);
 
-  void invalidate_table_scan_data();
-
   void extract_key(uchar* buf, ByteData* key);
   void extract_value(uchar* buf, ulong key_size, ByteData* value);
 

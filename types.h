@@ -1,10 +1,19 @@
-#ifndef MYSQL_TYPES_H
-#define MYSQL_TYPES_H
+#ifndef MYSQL_HABC_TYPES_H
+#define MYSQL_HABC_TYPES_H
+
+// boost fix: https://github.com/boostorg/config/issues/322
+#ifndef __clang_major__
+#define __clang_major___WORKAROUND_GUARD 1
+#else
+#define __clang_major___WORKAROUND_GUARD 0
+#endif
 
 #include <iostream>
 #include <unordered_map>
+#include <boost/functional/hash.hpp>
 
 using TableName = const char*;
+using byte = unsigned char;
 
 class Connector;
 class blockchain_table_tx;
@@ -27,13 +36,13 @@ using ha_data_map = std::unordered_map<TableName, std::unique_ptr<bc_ha_data_tab
 
 class ByteData {
  public:
-  ByteData() {}
-  ByteData(unsigned char *p_data, uint8_t p_dataSize) {
+  ByteData() = default;
+  ByteData(byte* p_data, uint8_t p_dataSize) {
     data = p_data;
     dataSize = p_dataSize;
   }
 
-  unsigned char *data;
+  byte* data;
   uint8_t dataSize;
 };
 
@@ -43,19 +52,36 @@ class ByteData {
  */
 class ManagedByteData {
  public:
-  ManagedByteData() {}
-  ManagedByteData(std::unique_ptr<unsigned char[]>& p_data, uint8_t p_dataSize) {
-    data = std::move(p_data);
-    dataSize = p_dataSize;
+  ManagedByteData() = default;
+  explicit ManagedByteData(std::shared_ptr<std::vector<byte>>& p_data) {
+    data = p_data;
+  }
+  explicit ManagedByteData(size_t size) {
+    data = std::make_shared<std::vector<byte>>(size);
   }
 
-  std::unique_ptr<unsigned char[]> data;
-  uint8_t dataSize;
+  std::shared_ptr<std::vector<byte>> data;
 };
+
+inline bool operator==(const ManagedByteData& lhs, const ManagedByteData& rhs) {
+  return *(lhs.data.get()) == *(rhs.data.get());
+}
+
+// Define hash function for ManagedByteData
+namespace std {
+  template <>
+  struct hash<ManagedByteData>
+  {
+    std::size_t operator()(const ManagedByteData& k) const
+    {
+      return boost::hash<std::vector<unsigned char>>()(*(k.data.get()));
+    }
+  };
+}
 
 class PutOp {
  public:
-  TableName table;
+  TableName table{};
   ManagedByteData value;
   ManagedByteData key;
 };
@@ -63,8 +89,8 @@ class PutOp {
 
 class RemoveOp {
  public:
-  TableName table;
+  TableName table{};
   ManagedByteData key;
 };
 
-#endif  // MYSQL_TYPES_H
+#endif  // MYSQL_HABC_TYPES_H

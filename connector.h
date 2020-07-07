@@ -40,7 +40,13 @@ class Connector {
    * Do a table scan, puts tuples in provided vector object (key+value concatenated)
    * --> faster than getting each KV-pair in an own transaction
    */
-  virtual void tableScan(TableName table, std::vector<ManagedByteData> &tuples, size_t keyLength, size_t valueLength) = 0;
+  virtual void tableScanToVec(TableName table, std::vector<ManagedByteData> &tuples, const size_t keyLength, const size_t valueLength) = 0;
+
+  /*
+   * Do a table scan, puts tuples in provided map object (map key to value)
+   * --> faster than getting each KV-pair in an own transaction
+   */
+  virtual void tableScanToMap(TableName table, tx_cache_t& tuples, size_t keyLength, size_t valueLength) = 0;
 
   /*
    * Drop table

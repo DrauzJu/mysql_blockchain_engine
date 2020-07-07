@@ -194,7 +194,7 @@ int Ethereum::putBatch(std::vector<PutOp>* data) {
   dataString << uint32tToHex(size); // number of keys
   for(ulong i=0; i<size; i++) {
     auto& putOp = data->at(i);
-    auto bd = ByteData(putOp.key.data.get(), putOp.key.dataSize);
+    auto bd = ByteData(putOp.key.data->data(), putOp.key.data->size());
     dataString << byteArrayToHex(&bd);
   }
 
@@ -202,7 +202,7 @@ int Ethereum::putBatch(std::vector<PutOp>* data) {
   dataString << uint32tToHex(size); // number of values
   for(ulong i=0; i<size; i++) {
     auto& putOp = data->at(i);
-    auto bd = ByteData(putOp.value.data.get(), putOp.value.dataSize);
+    auto bd = ByteData(putOp.value.data->data(), putOp.value.data->size());
     dataString << byteArrayToHex(&bd);
   }
 
@@ -247,50 +247,78 @@ int Ethereum::remove(TableName, ByteData *key) {
     }
 }
 
-void Ethereum::tableScan(TableName, std::vector<ManagedByteData>& tuples, size_t keyLength, size_t valueLength) {
+void Ethereum::tableScanToVec(TableName,
+                              std::vector<ManagedByteData> &tuples,
+                              const size_t keyLength, const size_t valueLength) {
 
-    RPCparams params;
-    params.method = "eth_call";
-    params.data = "0xb3055e26";
-    params.quantity_tag = "latest";
+  auto results = tableScanCall();
+  unsigned int count = getTableScanResultsSize(results);
+  if(count == 0) {
+    return;
+  }
 
-    const std::string s = call(params, false);
+  for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
+    std::vector<int>::size_type valueIndex = i + count + 1;
 
-    nlohmann::json json = nlohmann::json::parse(s);
-    std::string rpcResult = json["result"];
-    rpcResult = rpcResult.substr(2);
+    auto tuple = ManagedByteData(keyLength + valueLength);
 
-    std::vector <std::string> results = Split(rpcResult, 64);
+    parse32ByteHexString(results[i], tuple.data->data());
+    parse32ByteHexString(results[valueIndex], &((*tuple.data)[keyLength]));
 
-    // Extract number of tuples
-    unsigned int count;
-    if(results.size() > 2) {
-      std::stringstream ss;
-      ss << std::hex << results[2];
-      ss >> count;
-    } else {
-      return;
-    }
+    tuples.emplace_back(std::move(tuple));
+  }
 
-    for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
-        std::vector<int>::size_type valueIndex = i + count + 1;
+}
 
-        uint8_t key[32]; // 32 byte key
-        parse32ByteHexString(results[i], key);
+void Ethereum::tableScanToMap(TableName,
+                              tx_cache_t& tuples,
+                              size_t keyLength, size_t valueLength) {
 
-        uint8_t value[32]; // 32 byte value
-        parse32ByteHexString(results[valueIndex], value);
+  auto results = tableScanCall();
+  unsigned int count = getTableScanResultsSize(results);
+  if(count == 0) {
+    return;
+  }
 
-        auto row = std::make_unique<unsigned char[]>(keyLength + valueLength);
+  for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
+    std::vector<int>::size_type valueIndex = i + count + 1;
 
-        // Copy key
-        memcpy(row.get(), key, keyLength);
+    auto key = ManagedByteData(keyLength);
+    auto value = ManagedByteData(valueLength);
 
-        // Copy value
-        memcpy(&(row[keyLength]), value, valueLength);
+    parse32ByteHexString(results[i], key.data->data());
+    parse32ByteHexString(results[valueIndex], value.data->data());
 
-        tuples.emplace_back(row, keyLength + valueLength);
-    }
+    tuples[key] = std::move(value);
+  }
+}
+
+std::vector<std::string> Ethereum::tableScanCall() {
+  RPCparams params;
+  params.method = "eth_call";
+  params.data = "0xb3055e26";
+  params.quantity_tag = "latest";
+
+  const std::string s = call(params, false);
+
+  nlohmann::json json = nlohmann::json::parse(s);
+  std::string rpcResult = json["result"];
+  rpcResult = rpcResult.substr(2);
+
+  return Split(rpcResult, 64);
+}
+
+size_t Ethereum::getTableScanResultsSize(std::vector<std::string> response) {
+  // Extract number of tuples
+  unsigned int count;
+  if(response.size() > 2) {
+    std::stringstream ss;
+    ss << std::hex << response[2];
+    ss >> count;
+    return count;
+  } else {
+    return -1;
+  }
 }
 
 int Ethereum::dropTable(TableName ) {
