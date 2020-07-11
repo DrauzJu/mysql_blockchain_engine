@@ -392,12 +392,10 @@ int ha_blockchain::delete_row(const uchar *buf) {
     memcpy(removeOp.key.data->data(), key.data, key.dataSize);
 
     auto bc_thd_data = ha_data_get(ha_thd(), table->alias);
-    if(useTableScanCache()) {
-      // allows to further iterate over cache without invalidating iterator pointers
-      bc_thd_data->tx->addPendingRemove(std::move(removeOp));
-    } else {
-      bc_thd_data->tx->addRemove(std::move(removeOp));
-    }
+
+    // If table scan cache is used, only add pending remove
+    // --> allows to further iterate over cache without invalidating iterator pointers
+    bc_thd_data->tx->addRemove(std::move(removeOp), useTableScanCache());
 
     return 0;
   } else {
@@ -521,20 +519,29 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
   sql_update.cc
 */
 int ha_blockchain::rnd_init(bool) {
-  log("Preparing for table scan");
-
   Field* key_field = *(table->field);
   size_t keyLength = key_field->pack_length();
   size_t valueLength = table->s->reclength - keyLength - table->s->null_bytes;
 
   current_position = -1;
 
-  if(useTableScanCache()) {
+  if(inTransaction()) {
     auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
-    if(tx->tableScanData.empty()) {
+
+    if(useTableScanCache()) {
+      tx->pendingRemoveActivated = true;
+    } else {
+      // in a transaction, but with Isolation Level READ_COMMITTED --> do not use table scan cache
+      tx->tableScanData.clear();
+      tx->tableScanDataFilled = false;
+    }
+
+    if(!tx->tableScanDataFilled) {
       connector->tableScanToMap(table->alias, tx->tableScanData, keyLength, valueLength);
       tx->reapplyPendingOperations();
+      tx->tableScanDataFilled = true;
     }
+
   } else {
     connector->tableScanToVec(table->alias, rndTableScanData, keyLength, valueLength);
   }
@@ -546,11 +553,18 @@ int ha_blockchain::rnd_init(bool) {
 int ha_blockchain::rnd_end() {
   DBUG_TRACE;
 
-  if(!useTableScanCache()) {
+  if(!inTransaction()) {
+    // just clear temporary data used for table scan
     rndTableScanData.clear();
   } else {
     auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
-    tx->applyPendingRemoveOps();
+    if(useTableScanCache()) {
+      tx->applyPendingRemoveOps();
+      tx->pendingRemoveActivated = false;
+    } else {
+      // Higher isolation level is set --> do not use table scan cache --> clear it
+      tx->tableScanData.clear();
+    }
   }
 
   return 0;
@@ -900,6 +914,8 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
     return HA_ERR_WRONG_COMMAND;
   }
 
+  int success = 0;
+
   std::cout << "[BLOCKCHAIN - static] " << "In bc_commit" << std::endl; // DEBUG
 
   // For each table that took part in transaction, process pending operations
@@ -912,20 +928,26 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
       continue;
     }
 
-    if(connector->putBatch(tx->getPutOperations()) != 0) {
-      std::cerr << "PutBatch of commit failed, DATA INCONSISTENCY may occur!";
+    if(!tx->getPutOperations()->empty()) {
+      int rc_putBatch = connector->putBatch(tx->getPutOperations());
+      success = std::max(success, rc_putBatch);
+      if(rc_putBatch != 0) {
+        std::cerr << "Commit putBatch failed, DATA INCONSISTENCY may occur!";
+      }
     }
 
     for(auto& i : *tx->getRemoveOperations()) {
       ByteData bd(i.key.data->data(), i.key.data->size());
-      if(connector->remove(i.table, &bd) != 0) {
-        std::cerr << "Remove of commit failed, DATA INCONSISTENCY may occur!";
+      int rc = connector->remove(i.table, &bd);
+      success = std::max(success, rc);
+      if(rc != 0) {
+        std::cerr << "Commit of a remove failed, DATA INCONSISTENCY may occur!";
       }
     }
   }
 
   // free tx --> done automatically since leaves scope
-  return 0;
+  return success;
 }
 
 int ha_blockchain::bc_rollback(handlerton *, THD *thd, bool all) {
@@ -957,7 +979,7 @@ int ha_blockchain::find_row(my_off_t index, uchar *buf) {
   ByteData data{};
   std::unique_ptr<ManagedByteData> tempBuffer;
 
-  if(useTableScanCache()) {
+  if(inTransaction()) {
     auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
     if(index >= tx->tableScanData.size()) {
       return HA_ERR_END_OF_FILE;

@@ -10,15 +10,15 @@ void log(const std::string& msg, const std::string& method = "") {
     std::cout << "[ETHEREUM " << m << msg << std::endl;
 }
 
-static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
-    ((std::string*)userp)->append((char*)contents, size * nmemb);
+static size_t WriteCallback(char *contents, size_t size, size_t nmemb, void *userp) {
+    ((std::string*)userp)->append(contents, size * nmemb);
     return size * nmemb;
 }
 
-static void parse32ByteHexString(const std::string& s, uint8_t* out) {
+static void parse32ByteHexString(const std::string& s, uint8_t* out, size_t length) {
     const char* hexString = s.c_str();
 
-    for(int i=0; i<32; i++) {
+    for(size_t i=0; i<length; i++) {
         char byteString[3];
         byteString[0] = hexString[2*i];
         byteString[1] = hexString[2*i+1];
@@ -106,7 +106,7 @@ Ethereum::Ethereum(std::string connectionString,
     this->maxWaitingTime = maxWaitingTime;
 
     curl = curl_easy_init();
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L); // Problem: ganache default keep-alive timeout is only 5s
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
     curl_easy_setopt(curl, CURLOPT_URL, _connectionString.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
 
@@ -140,14 +140,12 @@ int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) 
     if (std::regex_search(response.begin(), response.end(), match, rgx)) {
       std::string result = match[1];
 
-      uint8_t value[32]; // 32 byte value
-      parse32ByteHexString(result, value);
-
       // Copy key
       memcpy(&(buf[0]), key->data, key->dataSize);
 
-      // Copy value
-      memcpy(&(buf[key->dataSize]), value, value_size);
+      // Extract value and save in buf
+      std::vector<uint8_t> value(value_size);
+      parse32ByteHexString(result, &(buf[key->dataSize]), value_size);
 
       return 0;
     } else {
@@ -155,7 +153,7 @@ int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) 
       return HA_ERR_END_OF_FILE;
     }
   } else {
-    log("failed", "Get");
+    log("Failed: no result found", "Get");
     return 1;
   }
 }
@@ -178,7 +176,7 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
         log("success", "Put");
         return 0;
     } else {
-        log("failed", "Put");
+        log("Failed: " + response, "Put");
         return 1;
     }
 }
@@ -219,7 +217,7 @@ int Ethereum::putBatch(std::vector<PutOp>* data) {
     log("success", "PutBatch");
     return 0;
   } else {
-    log("failed", "PutBatch");
+    log("Failed: " + response, "PutBatch");
     return 1;
   }
 
@@ -242,7 +240,7 @@ int Ethereum::remove(TableName, ByteData *key) {
         log("success", "Remove");
         return 0;
     } else {
-        log("failed", "Remove");
+        log("Failed: " + response, "Remove");
         return 1;
     }
 }
@@ -262,8 +260,8 @@ void Ethereum::tableScanToVec(TableName,
 
     auto tuple = ManagedByteData(keyLength + valueLength);
 
-    parse32ByteHexString(results[i], tuple.data->data());
-    parse32ByteHexString(results[valueIndex], &((*tuple.data)[keyLength]));
+    parse32ByteHexString(results[i], tuple.data->data(), keyLength);
+    parse32ByteHexString(results[valueIndex], &((*tuple.data)[keyLength]), valueLength);
 
     tuples.emplace_back(std::move(tuple));
   }
@@ -286,8 +284,8 @@ void Ethereum::tableScanToMap(TableName,
     auto key = ManagedByteData(keyLength);
     auto value = ManagedByteData(valueLength);
 
-    parse32ByteHexString(results[i], key.data->data());
-    parse32ByteHexString(results[valueIndex], value.data->data());
+    parse32ByteHexString(results[i], key.data->data(), keyLength);
+    parse32ByteHexString(results[valueIndex], value.data->data(), valueLength);
 
     tuples[key] = std::move(value);
   }
@@ -306,7 +304,7 @@ std::vector<std::string> Ethereum::tableScanCall() {
     auto json = nlohmann::json::parse(s);
     rpcResult = json["result"];
     rpcResult = rpcResult.substr(2);
-  } catch (std::exception e) {
+  } catch (std::exception&) {
     std::cerr << "[BLOCKCHAIN] - Can not parse TableScan response!" << std::endl;
   }
 
@@ -322,7 +320,7 @@ size_t Ethereum::getTableScanResultsSize(std::vector<std::string> response) {
     ss >> count;
     return count;
   } else {
-    return -1;
+    return 0;
   }
 }
 
@@ -395,17 +393,28 @@ std::string Ethereum::call(RPCparams params, bool setGas) {
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBufferCall);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
-    curl_easy_perform(curl);
+    CURLcode res = curl_easy_perform(curl);
+
+    if(res != CURLE_OK) {
+      auto msg = "CURL perform() returned an error: " + std::string(curl_easy_strerror(res));
+      log(msg, "Call");
+    }
     
   } else log("no curl", "Call");
 
   std::string readBuffer;
   if(params.method == "eth_sendTransaction") {
-    nlohmann::json jsonResponse = nlohmann::json::parse(readBufferCall);
     try {
+      nlohmann::json jsonResponse = nlohmann::json::parse(readBufferCall);
       readBuffer = checkMiningResult(jsonResponse["result"]);
     } catch (TransactionConfirmationException& e) {
       readBuffer = "error: " + std::string(e.what());
+    } catch (nlohmann::json::parse_error& ) {
+      readBuffer = "error: Can not parse response from eth_sendTransaction, so unable to check MiningResult";
+      log("Error parsing call response: " + readBufferCall, "Call");
+    } catch(nlohmann::json::type_error& ) {
+      readBuffer = "error: Can not parse response from eth_sendTransaction, so unable to check MiningResult";
+      log("Error parsing call response: " + readBufferCall, "Call");
     }
   } else {
     readBuffer = readBufferCall;

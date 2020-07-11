@@ -5,13 +5,13 @@ void blockchain_table_tx::addPut(PutOp data) {
   put_operations.emplace_back(std::move(data));
 }
 
-void blockchain_table_tx::addRemove(RemoveOp data) {
-  applyRemoveOpToCache(data);
-  remove_operations.emplace_back(std::move(data));
-}
-
-void blockchain_table_tx::addPendingRemove(RemoveOp data) {
-  pending_remove_operations.push(std::move(data));
+void blockchain_table_tx::addRemove(RemoveOp data, bool pending) {
+  if(pending && pendingRemoveActivated) {
+    pending_remove_operations.push(std::move(data));
+  } else {
+    applyRemoveOpToCache(data);
+    remove_operations.emplace_back(std::move(data));
+  }
 }
 
 std::vector<PutOp>* blockchain_table_tx::getPutOperations() {
@@ -45,6 +45,6 @@ void blockchain_table_tx::applyPendingRemoveOps() {
     auto pendingRemove = std::move(pending_remove_operations.front());
     pending_remove_operations.pop();
 
-    addRemove(pendingRemove); // adds it to full list and applies to cache
+    addRemove(pendingRemove, false); // adds it to full list and applies to cache
   }
 }

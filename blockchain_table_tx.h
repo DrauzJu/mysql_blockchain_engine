@@ -24,15 +24,17 @@ class blockchain_table_tx {
   std::vector<PutOp> put_operations;
   std::vector<RemoveOp> remove_operations;
   std::queue<RemoveOp> pending_remove_operations;
+
   void applyPutOpToCache(PutOp& op);
   void applyRemoveOpToCache(RemoveOp& op);
 
  public:
   tx_cache_t tableScanData;
+  bool tableScanDataFilled;
+  bool pendingRemoveActivated;
 
   void addPut(PutOp data);
-  void addRemove(RemoveOp data);
-  void addPendingRemove(RemoveOp data);
+  void addRemove(RemoveOp data, bool pending);
   std::vector<PutOp>* getPutOperations();
   std::vector<RemoveOp>* getRemoveOperations();
   void reapplyPendingOperations();
