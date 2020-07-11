@@ -118,6 +118,7 @@ static int config_type;
 static char* config_connection;
 static int config_use_ts_cache;
 static char* config_eth_contracts;
+static char* config_eth_tx_contract;
 static char* config_eth_from;
 static int config_eth_max_waiting_time;
 
@@ -319,7 +320,7 @@ int ha_blockchain::write_row(uchar *buf) {
   } else {
     // else (auto-commit): don't copy any data, just use buf to directly store data
     log("Detected no transaction during write --> execute directly"); //DEBUG
-    return connector->put(table->alias, &key, &value);
+    return connector->put(&key, &value);
   }
 }
 
@@ -407,7 +408,7 @@ int ha_blockchain::delete_row(const uchar *buf) {
     return 0;
   } else {
     // else (auto-commit): don't copy any data, just use buf to directly store data
-    return connector->remove(table->alias, &key);
+    return connector->remove(&key);
   }
 }
 
@@ -503,6 +504,10 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
   uint8_t key_size = (*(table->field))->pack_length();
   ByteData keyBD(const_cast<uchar*>(key), key_size);
 
+  // Get value
+  findConnector(table->alias);
+  int valueSize = table->s->reclength - key_size - initial_null_bytes;
+  connector->get(&keyBD, &(buf[pos]), valueSize);
   if(useTableScanCache()) {
     auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
 
@@ -520,7 +525,7 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
   } else {
     findConnector(table->alias);
     int valueSize = table->s->reclength - key_size - initial_null_bytes;
-    connector->get(table->alias, &keyBD, &(buf[pos]), valueSize);
+    connector->get(&keyBD, &(buf[pos]), valueSize);
   }
 
   return 0;
@@ -559,13 +564,13 @@ int ha_blockchain::rnd_init(bool) {
     }
 
     if(!tx->tableScanDataFilled) {
-      connector->tableScanToMap(table->alias, tx->tableScanData, keyLength, valueLength);
+      connector->tableScanToMap(tx->tableScanData, keyLength, valueLength);
       tx->reapplyPendingOperations();
       tx->tableScanDataFilled = true;
     }
 
   } else {
-    connector->tableScanToVec(table->alias, rndTableScanData, keyLength, valueLength);
+    connector->tableScanToVec(rndTableScanData, keyLength, valueLength);
   }
 
   DBUG_TRACE;
@@ -835,7 +840,7 @@ THR_LOCK_DATA **ha_blockchain::store_lock(THD *, THR_LOCK_DATA **to,
 */
 int ha_blockchain::delete_table(const char *name, const dd::Table *) {
   findConnector(name);
-  return connector->dropTable(name);
+  return connector->dropTable();
 }
 
 /**
@@ -936,11 +941,12 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
     return HA_ERR_WRONG_COMMAND;
   }
 
-  int success = 0;
-
   std::cout << "[BLOCKCHAIN - static] " << "In bc_commit" << std::endl; // DEBUG
 
-  // For each table that took part in transaction, process pending operations
+  auto affectedTables = std::vector<TableName>();
+  TXID txID;
+
+  // For each table that took part in transaction, prepare commit
   for(auto& table_data : *ha_data_get_all(thd)) {
     auto connector = table_data.second->connector;
     auto tx = std::move(table_data.second->tx);
@@ -950,26 +956,51 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
       continue;
     }
 
+    // Add table to list of affected tables
+    affectedTables.emplace_back(table_data.first);
+    txID = tx->getID();
+
+    int successPrepare = 0;
     if(!tx->getPutOperations()->empty()) {
-      int rc_putBatch = connector->putBatch(tx->getPutOperations());
-      success = std::max(success, rc_putBatch);
-      if(rc_putBatch != 0) {
-        std::cerr << "Commit putBatch failed, DATA INCONSISTENCY may occur!";
-      }
+      int rc_putBatch = connector->putBatch(tx->getPutOperations(), tx->getID());
+      successPrepare = std::max(successPrepare, rc_putBatch);
     }
 
     for(auto& i : *tx->getRemoveOperations()) {
       ByteData bd(i.key.data->data(), i.key.data->size());
-      int rc = connector->remove(i.table, &bd);
-      success = std::max(success, rc);
-      if(rc != 0) {
-        std::cerr << "Commit of a remove failed, DATA INCONSISTENCY may occur!";
+      int rc = connector->remove(&bd, tx->getID());
+      successPrepare = std::max(successPrepare, rc);
+    }
+
+    if(successPrepare != 0) {
+      std::cerr << "Prepare of commit failed, will undo preparation. "
+                << "Transaction is deleted, please create a new one! "
+                << std::endl;
+      auto allHAData = ha_data_get_all(thd);
+      for(auto& table : affectedTables) {
+        auto tableConnector = (*allHAData)[table]->connector;
+        tableConnector->clearCommitPrepare(tx->getID());
       }
+
+      return HA_ERR_INTERNAL_ERROR;
     }
   }
 
-  // free tx --> done automatically since leaves scope
-  return success;
+  if(affectedTables.empty()) {
+    return 0; // nothing to commit
+  }
+
+  // Preparation of commit was successful --> call commit contract with all
+  // addresses to do atomic commit
+  auto addresses = std::vector<std::string>(affectedTables.size());
+  for(size_t i=0; i<affectedTables.size(); i++) {
+    addresses[i] = (*ha_blockchain::tableContractInfo)[affectedTables[i]];
+  }
+
+  switch (config_type) {
+    case ETHEREUM: return Ethereum::atomicCommit(txID, addresses);
+    default: return HA_ERR_WRONG_COMMAND;
+  }
 }
 
 int ha_blockchain::bc_rollback(handlerton *, THD *thd, bool all) {
@@ -1147,6 +1178,10 @@ static MYSQL_SYSVAR_STR(bc_eth_contracts, config_eth_contracts, PLUGIN_VAR_RQCMD
                         "Ethereum contract addresses", nullptr, nullptr,
                         nullptr);
 
+static MYSQL_SYSVAR_STR(bc_eth_tx_contract, config_eth_tx_contract, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+                        "Ethereum address for commit contract", nullptr, nullptr,
+                        nullptr);
+
 static MYSQL_SYSVAR_STR(bc_eth_from, config_eth_from, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
                         "Ethereum FROM address", nullptr, nullptr,
                         nullptr);
@@ -1160,6 +1195,7 @@ static SYS_VAR *blockchain_system_variables[] = {
     MYSQL_SYSVAR(bc_connection), // blockchain connection string (e.g. for Ethereum: http://127.0.0.1:8545)
     MYSQL_SYSVAR(bc_use_ts_cache), // 1 - yes, 0 - no
     MYSQL_SYSVAR(bc_eth_contracts), // Concept: one contract per table, format: tableName1:contractAddress,tableName2:contractAddress,...
+    MYSQL_SYSVAR(bc_eth_tx_contract),
     MYSQL_SYSVAR(bc_eth_from),
     MYSQL_SYSVAR(bc_eth_max_waiting_time),
     nullptr

@@ -14,6 +14,7 @@
 
 using TableName = const char*;
 using byte = unsigned char;
+using TXID = boost::uuids::uuid;
 
 class Connector;
 class blockchain_table_tx;

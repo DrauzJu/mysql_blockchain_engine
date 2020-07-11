@@ -255,7 +255,7 @@ class ha_blockchain : public handler {
   /** @brief
    * Logging helper
    */
-   void log(const std::string& msg);
+  void log(const std::string& msg);
 
   void findConnector(const char* tableName);
 

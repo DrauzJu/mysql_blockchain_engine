@@ -1,9 +1,26 @@
 #ifndef MYSQL_BLOCKCHAIN_TABLE_TX_H
 #define MYSQL_BLOCKCHAIN_TABLE_TX_H
 
+// boost fix: https://github.com/boostorg/config/issues/322
+#ifndef __clang_major__
+#define __clang_major___WORKAROUND_GUARD 1
+#else
+#define __clang_major___WORKAROUND_GUARD 0
+#endif
+#define BOOST_FT_CC_IMPLICIT 0
+#define BOOST_FT_CC_CDECL 0
+#define BOOST_FT_CC_STDCALL 0
+#define BOOST_FT_CC_PASCAL 0
+#define BOOST_FT_CC_FASTCALL 0
+#define BOOST_FT_CC_CLRCALL 0
+#define BOOST_FT_CC_THISCALL 0
+#define BOOST_FT_CC_IMPLICIT_THISCALL 0
+
 #include <memory>
 #include <queue>
 #include <vector>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
 #include "types.h"
 
 /*
@@ -24,6 +41,7 @@ class blockchain_table_tx {
   std::vector<PutOp> put_operations;
   std::vector<RemoveOp> remove_operations;
   std::queue<RemoveOp> pending_remove_operations;
+  TXID id;
 
   void applyPutOpToCache(PutOp& op);
   void applyRemoveOpToCache(RemoveOp& op);
@@ -33,12 +51,15 @@ class blockchain_table_tx {
   bool tableScanDataFilled;
   bool pendingRemoveActivated;
 
+  blockchain_table_tx();
+
   void addPut(PutOp data);
   void addRemove(RemoveOp data, bool pending);
   std::vector<PutOp>* getPutOperations();
   std::vector<RemoveOp>* getRemoveOperations();
   void reapplyPendingOperations();
   void applyPendingRemoveOps();
+  TXID getID();
 
 };
 

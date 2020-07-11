@@ -117,7 +117,7 @@ Ethereum::~Ethereum() {
     curl_easy_cleanup(curl);
 }
 
-int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) {
+int Ethereum::get(ByteData* key, unsigned char* buf, int value_size) {
   std::string hexKey = byteArrayToHex(key);
 
   RPCparams params;
@@ -158,7 +158,7 @@ int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) 
   }
 }
 
-int Ethereum::put(TableName, ByteData* key, ByteData* value) {
+int Ethereum::put(ByteData* key, ByteData* value) {
 
     std::string hexKey = byteArrayToHex(key);
     std::string hexVal = byteArrayToHex(value);
@@ -181,7 +181,8 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
     }
 }
 
-int Ethereum::putBatch(std::vector<PutOp>* data) {
+// todo: TXID
+int Ethereum::putBatch(std::vector<PutOp>* data, TXID ) {
   auto size = data->size();
 
   std::stringstream dataString;
@@ -223,7 +224,8 @@ int Ethereum::putBatch(std::vector<PutOp>* data) {
 
 }
 
-int Ethereum::remove(TableName, ByteData *key) {
+// todo: TXID
+int Ethereum::remove(ByteData *key, TXID ) {
 
     std::string hexKey = byteArrayToHex(key);
 
@@ -245,8 +247,7 @@ int Ethereum::remove(TableName, ByteData *key) {
     }
 }
 
-void Ethereum::tableScanToVec(TableName,
-                              std::vector<ManagedByteData> &tuples,
+void Ethereum::tableScanToVec(std::vector<ManagedByteData> &tuples,
                               const size_t keyLength, const size_t valueLength) {
 
   auto results = tableScanCall();
@@ -268,8 +269,7 @@ void Ethereum::tableScanToVec(TableName,
 
 }
 
-void Ethereum::tableScanToMap(TableName,
-                              tx_cache_t& tuples,
+void Ethereum::tableScanToMap(tx_cache_t& tuples,
                               size_t keyLength, size_t valueLength) {
 
   auto results = tableScanCall();
@@ -324,7 +324,7 @@ size_t Ethereum::getTableScanResultsSize(std::vector<std::string> response) {
   }
 }
 
-int Ethereum::dropTable(TableName ) {
+int Ethereum::dropTable() {
   // todo: implement: call function drop() of contract
   return 0;
 }
@@ -408,4 +408,14 @@ std::string Ethereum::call(RPCparams params, bool setGas) {
   }
 
   return readBuffer;
+}
+
+// todo
+int Ethereum::clearCommitPrepare(boost::uuids::uuid ) {
+  return 0;
+}
+
+// todo: Call Eth contract
+int Ethereum::atomicCommit(TXID , std::vector<std::string> ) {
+  return 0;
 }
