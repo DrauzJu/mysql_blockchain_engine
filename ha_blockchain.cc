@@ -152,8 +152,10 @@ static handler *blockchain_create_handler(handlerton *hton, TABLE_SHARE *table,
   return new (mem_root) ha_blockchain(hton, table);
 }
 
+// Create static members
 std::unordered_map<std::string, std::string>* ha_blockchain::tableContractInfo;
 std::mutex ha_blockchain::ha_data_create_mtx;
+std::mutex ha_blockchain::ha_data_create_tx_mtx;
 
 ha_blockchain::ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg)
     : handler(hton, table_arg) {
@@ -921,7 +923,8 @@ int ha_blockchain::start_transaction(THD *thd) {
   auto bc_ha_data = ha_data_get(thd, table->alias);
 
   if(bc_ha_data->tx == nullptr) {
-    bc_ha_data->tx = std::make_unique<blockchain_table_tx>();
+    std::lock_guard<std::mutex> lock(ha_data_create_tx_mtx);
+    bc_ha_data->tx = std::make_unique<blockchain_table_tx>(thd, blockchain_hton->slot);
     log("Creating transaction and registering"); // DEBUG
 
     // register transaction in MySQL core

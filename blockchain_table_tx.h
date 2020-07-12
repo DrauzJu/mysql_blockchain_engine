@@ -23,6 +23,8 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include "types.h"
 
+#include <sql/sql_class.h>
+
 /*
  * The tableScanData is also used during UPDATES and DELETES to find matching tuples.
  * We need to ensure that the tableScanData remains usable during one table scan even if
@@ -51,7 +53,7 @@ class blockchain_table_tx {
   bool tableScanDataFilled;
   bool pendingRemoveActivated;
 
-  blockchain_table_tx();
+  blockchain_table_tx(THD* thd, int hton_slot);
 
   void addPut(PutOp data);
   void addRemove(RemoveOp data, bool pending);

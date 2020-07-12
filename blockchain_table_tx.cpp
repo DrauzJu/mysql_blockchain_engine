@@ -1,6 +1,18 @@
 #include "blockchain_table_tx.h"
 
-blockchain_table_tx::blockchain_table_tx() {
+blockchain_table_tx::blockchain_table_tx(THD* thd, int hton_slot) {
+  // Get or create transaction ID
+  auto ha_data_ptr = thd->get_ha_data(hton_slot);
+  auto ha_data = static_cast<ha_data_map *>(ha_data_ptr->ha_ptr);
+
+  // Check if a table_tx object already exists: if yes, copy transaction ID
+  for(auto& table_tx : *ha_data) {
+    if(table_tx.second->tx != nullptr) {
+      id = table_tx.second->tx->getID();
+      return;
+    }
+  }
+
   boost::uuids::random_generator gen;
   id = gen();
 }
