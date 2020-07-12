@@ -496,10 +496,25 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
   uint8_t key_size = (*(table->field))->pack_length();
   ByteData keyBD(const_cast<uchar*>(key), key_size);
 
-  // Get value
-  findConnector(table->alias);
-  int valueSize = table->s->reclength - key_size - initial_null_bytes;
-  connector->get(table->alias, &keyBD, &(buf[pos]), valueSize);
+  if(useTableScanCache()) {
+    auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
+
+    // Copy key
+    memcpy(&(buf[pos]), keyBD.data, keyBD.dataSize);
+    pos += keyBD.dataSize;
+
+    // Create temp key
+    ManagedByteData tmpKey;
+    tmpKey.data->insert(tmpKey.data->begin(), keyBD.data, keyBD.data + keyBD.dataSize);
+
+    // Extract and copy value
+    auto value = tx->tableScanData[tmpKey];
+    memcpy(&buf[pos], value.data->data(), value.data->size());
+  } else {
+    findConnector(table->alias);
+    int valueSize = table->s->reclength - key_size - initial_null_bytes;
+    connector->get(table->alias, &keyBD, &(buf[pos]), valueSize);
+  }
 
   return 0;
 }
