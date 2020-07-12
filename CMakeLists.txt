@@ -21,11 +21,19 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 SET(BLOCKCHAIN_PLUGIN_DYNAMIC "ha_blockchain")
-SET(BLOCKCHAIN_SOURCES ha_blockchain.cc connector_impl/ethereum.cpp blockchain_tx.cpp)
+SET(BLOCKCHAIN_SOURCES ha_blockchain.cc connector_impl/ethereum.cpp blockchain_table_tx.cpp)
 ADD_DEFINITIONS(-DMYSQL_SERVER)
 
-# FIND_PACKAGE(Boost REQUIRED)
-# include_directories(${Boost_INCLUDE_DIRS})
+# C++ 17
+set(CMAKE_CXX_STANDARD 17)
+
+# Boost
+set(BOOST_INCLUDEDIR "${WITH_BOOST}")
+FIND_PACKAGE( Boost REQUIRED )
+INCLUDE_DIRECTORIES( "${WITH_BOOST}" )
+
+get_filename_component(TSL_DIR_ABS deps ABSOLUTE)
+INCLUDE_DIRECTORIES( "${TSL_DIR_ABS}" )
 
 IF(WITH_BLOCKCHAIN_STORAGE_ENGINE AND NOT WITHOUT_BLOCKCHAIN_STORAGE_ENGINE)
   MYSQL_ADD_PLUGIN(blockchain ${BLOCKCHAIN_SOURCES} STORAGE_ENGINE DEFAULT)

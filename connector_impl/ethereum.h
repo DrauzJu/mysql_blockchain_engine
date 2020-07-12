@@ -44,9 +44,10 @@ public:
 
     int get(TableName table, ByteData* key, unsigned char* buf, int value_size) override;
     int put(TableName table, ByteData* key, ByteData* value) override;
-    int putBatch(std::vector<std::unique_ptr<PutOp>>* data) override;
+    int putBatch(std::vector<PutOp>* data) override;
     int remove(TableName table, ByteData *key) override;
-    void tableScan(TableName table, std::vector<ByteData> &tuples, size_t keyLength, size_t valueLength) override;
+    void tableScanToVec(TableName table, std::vector<ManagedByteData> &tuples, size_t keyLength, size_t valueLength) override;
+    void tableScanToMap(TableName table, tx_cache_t& tuples, size_t keyLength, size_t valueLength) override;
     int dropTable(TableName table) override;
 
     std::string call(const RPCparams params, bool setGas);
@@ -62,6 +63,9 @@ private:
     CURL *curl;
 
     int mineCheckWaitingTime[MINE_CHECK_TRIES] = {40000, 10000, 5000, 3000, 1000, 500};
+
+    std::vector <std::string> tableScanCall();
+    static size_t getTableScanResultsSize(std::vector<std::string> response);
 };
 
 #endif  // MYSQL_8_0_20_ETHEREUM_H
