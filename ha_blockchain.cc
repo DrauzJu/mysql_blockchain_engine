@@ -504,10 +504,6 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
   uint8_t key_size = (*(table->field))->pack_length();
   ByteData keyBD(const_cast<uchar*>(key), key_size);
 
-  // Get value
-  findConnector(table->alias);
-  int valueSize = table->s->reclength - key_size - initial_null_bytes;
-  connector->get(&keyBD, &(buf[pos]), valueSize);
   if(useTableScanCache()) {
     auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
 
