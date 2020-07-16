@@ -10,7 +10,7 @@
 #include "../connector.h"
 #include "json.hpp"
 
-#define MINE_CHECK_TRIES 6
+#define MINING_CHECK_INTERVAL 200
 
 struct RPCparams {
   std::string from;
@@ -50,7 +50,7 @@ public:
     void tableScanToMap(TableName table, tx_cache_t& tuples, size_t keyLength, size_t valueLength) override;
     int dropTable(TableName table) override;
 
-    std::string call(const RPCparams params, bool setGas);
+    std::string call(RPCparams params, bool setGas);
     std::string checkMiningResult(std::string transactionID);
     void updateMineCheckWaitingTime(int latestDurationMs);
 
@@ -58,11 +58,8 @@ private:
     std::string _contractAddress;
     std::string _fromAddress;
     std::string _connectionString;
-    int maxWaitingTime;
-
+    size_t maxWaitingTime;
     CURL *curl;
-
-    int mineCheckWaitingTime[MINE_CHECK_TRIES] = {40000, 10000, 5000, 3000, 1000, 500};
 
     std::vector <std::string> tableScanCall();
     static size_t getTableScanResultsSize(std::vector<std::string> response);

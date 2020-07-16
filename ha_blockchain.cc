@@ -1141,7 +1141,7 @@ static MYSQL_SYSVAR_STR(bc_eth_from, config_eth_from, PLUGIN_VAR_RQCMDARG | PLUG
                         nullptr);
 
 static MYSQL_SYSVAR_INT(bc_eth_max_waiting_time, config_eth_max_waiting_time, 0,
-                        "Ethereum max. time to wait for transaction mined", nullptr, nullptr, 32,
+                        "Ethereum max. time to wait for transaction mined (in seconds)", nullptr, nullptr, 32,
                         16, 300, 0);
 
 static MYSQL_SYSVAR_INT(bc_isolation_level, config_isolation_level, 0,

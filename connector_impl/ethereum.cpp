@@ -103,7 +103,7 @@ Ethereum::Ethereum(std::string connectionString,
     _contractAddress = std::move(contractAddress);
     _fromAddress = std::move(fromAddress);
     _connectionString = std::move(connectionString);
-    this->maxWaitingTime = maxWaitingTime;
+    this->maxWaitingTime = maxWaitingTime * 1000; // convert to ms
 
     curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
@@ -330,48 +330,35 @@ int Ethereum::dropTable(TableName ) {
 }
 
 std::string Ethereum::checkMiningResult(std::string transactionID) {
-  unsigned short tries = MINE_CHECK_TRIES;
   std::string response;
   RPCparams rpcParams;
   rpcParams.transactionID = std::move(transactionID);
   rpcParams.method = "eth_getTransactionByHash";
+  size_t waited = 0;
 
-  auto start = std::chrono::steady_clock::now();
-
-  while(tries > 0) {
-    std::this_thread::sleep_for (std::chrono::milliseconds (mineCheckWaitingTime[tries-1]));
+  while((waited + MINING_CHECK_INTERVAL) < this->maxWaitingTime) {
+    std::this_thread::sleep_for (std::chrono::milliseconds (MINING_CHECK_INTERVAL));
     response = call(rpcParams, false);
     nlohmann::json jsonResponse = nlohmann::json::parse(response);
 
     if(!(jsonResponse.at("result").at("blockNumber").is_null())) {
-      auto end = std::chrono::steady_clock::now();
-      updateMineCheckWaitingTime(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+      std::stringstream msg;
+      msg << "Mining took about " << waited << " ms";
+      log(msg.str(), "checkMiningResult");
       return response;
     }
 
-    tries--;
+    waited += MINING_CHECK_INTERVAL;
   }
 
-  auto end = std::chrono::steady_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-  updateMineCheckWaitingTime(duration);
 
   std::stringstream msg;
-  msg << "Failed to get transaction block number after " << duration << " ms";
+  msg << "Failed to get transaction block number after " << this->maxWaitingTime << " ms";
   log(msg.str());
 
   throw TransactionConfirmationException();
 }
 
-void Ethereum::updateMineCheckWaitingTime(int latestDurationMs) {
-  // calculate scale factor by comparing latestDurationMs with mineCheckWaitingTime[3]
-  // update all values by scale
-  double scale = latestDurationMs / ((double) mineCheckWaitingTime[3]);
-
-  for(int& i : mineCheckWaitingTime) {
-    i = std::ceil(i * scale);
-  }
-}
 
 std::string Ethereum::call(RPCparams params, bool setGas) {
 
