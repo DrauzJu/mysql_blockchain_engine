@@ -103,7 +103,7 @@ Ethereum::Ethereum(std::string connectionString,
     _contractAddress = std::move(contractAddress);
     _fromAddress = std::move(fromAddress);
     _connectionString = std::move(connectionString);
-    this->maxWaitingTime = maxWaitingTime;
+    this->maxWaitingTime = maxWaitingTime * 1000; // convert to ms
 
     curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
@@ -330,22 +330,25 @@ int Ethereum::dropTable(TableName ) {
 }
 
 std::string Ethereum::checkMiningResult(std::string transactionID) {
-  unsigned short tries = MINE_CHECK_TRIES;
   std::string response;
   RPCparams rpcParams;
   rpcParams.transactionID = std::move(transactionID);
   rpcParams.method = "eth_getTransactionByHash";
+  size_t waited = 0;
 
-  while(tries > 0) {
-    std::this_thread::sleep_for (std::chrono::milliseconds (this->maxWaitingTime));
+  while((waited + MINING_CHECK_INTERVAL) < this->maxWaitingTime) {
+    std::this_thread::sleep_for (std::chrono::milliseconds (MINING_CHECK_INTERVAL));
     response = call(rpcParams, false);
     nlohmann::json jsonResponse = nlohmann::json::parse(response);
 
     if(!(jsonResponse.at("result").at("blockNumber").is_null())) {
+      std::stringstream msg;
+      msg << "Mining took about " << waited << " ms";
+      log(msg.str(), "checkMiningResult");
       return response;
     }
 
-    tries--;
+    waited += MINING_CHECK_INTERVAL;
   }
 
 
