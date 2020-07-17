@@ -11,8 +11,14 @@ contract KVStore {
         bytes32 value;
     }
 
-    mapping(bytes32 => Value) private data; // data store
-    bytes32[] internal keyList;              // list of keys of data
+    struct TxValue {
+        bytes32 key;
+        bytes32 value;
+    }
+
+    mapping(bytes32 => Value) private data;         // data store
+    bytes32[] internal keyList;                     // list of keys of data
+    mapping(bytes16 => TxValue[]) private txBuffer; // buffer for transactions
 
     /// Store the pair key:value in the storage.
     /// @param key the new key to store
@@ -31,6 +37,34 @@ contract KVStore {
 
         // persist data in blockchain
         data[key] = v;
+    }
+
+    function put(
+        bytes32 key,
+        bytes32 value,
+        bytes16 txId)
+    public
+    {
+        TxValue memory v = TxValue(key,value);
+        txBuffer[txId].push(v);
+    }
+
+    function clean(
+        bytes16 txId)
+    public
+    {
+        delete txBuffer[txId];
+    }
+
+    function commit(
+        bytes16 txId)
+    public
+    {
+        TxValue[] memory values = txBuffer[txId];
+
+        for (uint i = 0; i < values.length; i++) {
+            put(values[i].key, values[i].value);
+        }
     }
 
     /// Stores multiplie key:value pairs in the storage.
