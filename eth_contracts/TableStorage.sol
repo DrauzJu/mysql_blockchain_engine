@@ -58,13 +58,15 @@ contract KVStore {
 
     function commit(
         bytes16 txId)
-    public
+    external
     {
         TxValue[] memory values = txBuffer[txId];
 
         for (uint i = 0; i < values.length; i++) {
             put(values[i].key, values[i].value);
         }
+
+        clean(txId);
     }
 
     /// Stores multiplie key:value pairs in the storage.

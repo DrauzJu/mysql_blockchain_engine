@@ -1,21 +1,21 @@
 pragma solidity ^0.6.8;
 
-import "./TableStorage.sol";
-
-
 contract Transaction  {
-
 
     function commit(
         bytes16 txId,
-        address[] memory contracts)
+        address[] memory stores)
     public
     {
-        for (uint i = 0; i < contracts.length; i++) {
-            KVStore kv = KVStore(contracts[i]);
+        for (uint i = 0; i < stores.length; i++) {
+            KVStore kv = KVStore(stores[i]);
             kv.commit(txId);
         }
 
     }
 
+}
+
+interface KVStore {
+    function commit(bytes16 txId) external;
 }

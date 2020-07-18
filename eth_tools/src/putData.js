@@ -2,7 +2,7 @@
 const Web3 = require('web3');
 const fs = require('fs');
 
-const CONTRACT_ADDRESS="0x28379284B69e4ED19b277b549EB8063F9cC06b7C";
+const CONTRACT_ADDRESS="0xa23BF85B8b197F848590c88A9a7E76b649231F0D";
 const FROM_ACCOUNT="0x15937E0c7Ea7Eb75f83982e202f4EAd585E382c5";
 
 // Connect to Ethereum node
@@ -15,7 +15,7 @@ const kvStore = new web3.eth.Contract(abi, CONTRACT_ADDRESS);
 
 const contractTxFile = fs.readFileSync("contract_abi/Transaction.json", "utf-8");
 const abiTx = JSON.parse(contractTxFile).abi;
-const tx = new web3.eth.Contract(abiTx, CONTRACT_ADDRESS);
+const tx = new web3.eth.Contract(abiTx, "0xbE53c062F05f9BB3582B9866E4d70e2DaF74D4c4");
 
 async function put(key, value, txId=null) {
     const putMethod = (txId === null) ? kvStore.methods.put(key, value) : kvStore.methods.put(key, value, txId);
@@ -78,16 +78,17 @@ async function commit(txId) {
 
 async function run() {
      await put(web3.utils.fromDecimal(1), web3.utils.fromDecimal(2));
-     await put(web3.utils.fromAscii("Key2"), web3.utils.fromAscii("value1"), web3.utils.fromAscii("txid1"));
+     await put(web3.utils.fromAscii("txKey0"), web3.utils.fromAscii("value1"), web3.utils.fromAscii("txid2"));
+     await put(web3.utils.fromAscii("txKey1"), web3.utils.fromAscii("value2"), web3.utils.fromAscii("txid2"));
     //await put(web3.utils.fromDecimal(10), web3.utils.fromAscii("Val1"));
 
-    await commit(web3.utils.fromAscii("txid1"));
+    await commit(web3.utils.fromAscii("txid2"));
 
 
     // await tableScan();
 
-    // await remove(web3.utils.fromAscii("Key1"));
-     await remove(web3.utils.fromDecimal(10));
+    // await remove(web3.utils.fromAscii("Key2"));
+    // await remove(web3.utils.fromDecimal(1));
     // await remove(web3.utils.fromDecimal(7));
 
     await tableScan();
