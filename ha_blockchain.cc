@@ -93,17 +93,18 @@
 */
 
 #include "storage/blockchain/ha_blockchain.h"
+#include <sql/sql_thd_internal_api.h>
 #include <sql/table.h>
 #include <iostream>
 #include <vector>
 
 #include "my_dbug.h"
+#include "mysql/components/services/log_builtins.h"
 #include "mysql/plugin.h"
+#include "sql/field.h"
 #include "sql/sql_class.h"
 #include "sql/sql_plugin.h"
 #include "typelib.h"
-#include "mysql/components/services/log_builtins.h"
-#include "sql/field.h"
 
 #include "connector_impl/ethereum.h"
 
@@ -115,7 +116,7 @@ handlerton *blockchain_hton;
 // System variables for configuration
 static int config_type;
 static char* config_connection;
-static int config_isolation_level;
+static int config_use_ts_cache;
 static char* config_eth_contracts;
 static char* config_eth_from;
 static int config_eth_max_waiting_time;
@@ -232,6 +233,12 @@ int ha_blockchain::open(const char *, int, uint, const dd::Table *) {
   std::stringstream msg;
   msg << "Opening table";
   log(msg.str());
+
+  // Check isolation level: support only ISO_REPEATABLE_READ and ISO_READ_COMMITTED
+  /* auto isolation = thd_get_trx_isolation(ha_thd());
+  if(!(isolation == ISO_REPEATABLE_READ || isolation == ISO_READ_COMMITTED)) {
+    return HA_ERR_WRONG_COMMAND;
+  } */
 
   findConnector(table->alias);
 
@@ -1118,7 +1125,7 @@ bool ha_blockchain::inTransaction() {
 }
 
 bool ha_blockchain::useTableScanCache() {
-  return inTransaction() && config_isolation_level == READ_UNCOMMITTED;
+  return inTransaction() && config_use_ts_cache;
 }
 
 struct st_mysql_storage_engine blockchain_storage_engine = {
@@ -1132,6 +1139,10 @@ static MYSQL_SYSVAR_STR(bc_connection, config_connection, PLUGIN_VAR_RQCMDARG | 
                         "Blockchain connection string", nullptr, nullptr,
                         nullptr);
 
+static MYSQL_SYSVAR_INT(bc_use_ts_cache, config_use_ts_cache, 0,
+                        "Blockchain use table scan cache", nullptr,
+                        nullptr, 1,0, 1, 0);
+
 static MYSQL_SYSVAR_STR(bc_eth_contracts, config_eth_contracts, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
                         "Ethereum contract addresses", nullptr, nullptr,
                         nullptr);
@@ -1144,17 +1155,13 @@ static MYSQL_SYSVAR_INT(bc_eth_max_waiting_time, config_eth_max_waiting_time, 0,
                         "Ethereum max. time to wait for transaction mined (in seconds)", nullptr, nullptr, 32,
                         16, 300, 0);
 
-static MYSQL_SYSVAR_INT(bc_isolation_level, config_isolation_level, 0,
-                          "Blockchain transaction isolation level", nullptr,
-                          nullptr, 0,0, 1, 0);
-
 static SYS_VAR *blockchain_system_variables[] = {
     MYSQL_SYSVAR(bc_type), // blockchain type: 0 - ethereum
     MYSQL_SYSVAR(bc_connection), // blockchain connection string (e.g. for Ethereum: http://127.0.0.1:8545)
+    MYSQL_SYSVAR(bc_use_ts_cache), // 1 - yes, 0 - no
     MYSQL_SYSVAR(bc_eth_contracts), // Concept: one contract per table, format: tableName1:contractAddress,tableName2:contractAddress,...
     MYSQL_SYSVAR(bc_eth_from),
     MYSQL_SYSVAR(bc_eth_max_waiting_time),
-    MYSQL_SYSVAR(bc_isolation_level), // 0 - READ UNCOMMITTED, 1 - READ COMMITTED
     nullptr
 };
 
