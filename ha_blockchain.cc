@@ -1016,7 +1016,15 @@ int ha_blockchain::bc_rollback(handlerton *, THD *thd, bool all) {
 
   // For each table that took part in transaction, delete pending operations
   for(auto& table_data : *ha_data_get_all(thd)) {
-    table_data.second->tx.reset();
+    auto tx = std::move(table_data.second->tx);
+
+    if(tx == nullptr) {
+      // transaction did not touch this table --> continue
+      continue;
+    }
+
+    auto tableConnector = table_data.second->connector;
+    tableConnector->clearCommitPrepare(tx->getID());
   }
 
   return 0;
