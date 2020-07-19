@@ -3,6 +3,8 @@
 
 #include <curl/curl.h>
 #include <storage/blockchain/connector.h>
+#include <storage/blockchain/blockchain_table_tx.h>
+#include <storage/blockchain/types.h>
 #include <cassert>
 #include <iostream>
 #include <regex>
@@ -43,8 +45,8 @@ public:
     ~Ethereum() override;
 
     int get(ByteData* key, unsigned char* buf, int value_size) override;
-    int put(ByteData* key, ByteData* value) override;
-    int putBatch(std::vector<PutOp> * data, TXID txID) override;
+    int put(ByteData* key, ByteData* value, TXID txID) override;
+    int putBatch(std::vector<PutOp> * data) override;
     int remove(ByteData *key, TXID txID) override;
     void tableScanToVec(std::vector<ManagedByteData> &tuples, size_t keyLength, size_t valueLength) override;
     void tableScanToMap(tx_cache_t& tuples, size_t keyLength, size_t valueLength) override;
@@ -53,7 +55,6 @@ public:
 
     std::string call(RPCparams params, bool setGas);
     std::string checkMiningResult(std::string transactionID);
-    void updateMineCheckWaitingTime(int latestDurationMs);
     static int atomicCommit(TXID txID, std::vector<std::string> addresses);
 
    private:

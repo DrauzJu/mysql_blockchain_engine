@@ -158,14 +158,23 @@ int Ethereum::get(ByteData* key, unsigned char* buf, int value_size) {
   }
 }
 
-int Ethereum::put(ByteData* key, ByteData* value) {
+int Ethereum::put(ByteData* key, ByteData* value, TXID txid) {
 
     std::string hexKey = byteArrayToHex(key);
     std::string hexVal = byteArrayToHex(value);
 
+    ByteData bdTxid(txid.data, 16);
+    std::string txidVal = byteArrayToHex(&bdTxid);
+
     RPCparams params;
     params.method = "eth_sendTransaction";
-    params.data = "0x4c667080" + hexKey + hexVal;
+
+    if(txid.is_nil()) {
+      params.data = "0x4c667080" + hexKey + hexVal;
+    } else {
+      params.data = "0xTODO" + hexKey + hexVal + txidVal;
+    }
+
     // log("Data: " + params.data, "Put");
 
     const std::string response = call(params, true);
@@ -181,8 +190,7 @@ int Ethereum::put(ByteData* key, ByteData* value) {
     }
 }
 
-// todo: TXID
-int Ethereum::putBatch(std::vector<PutOp>* data, TXID ) {
+int Ethereum::putBatch(std::vector<PutOp>* data) {
   auto size = data->size();
 
   std::stringstream dataString;
@@ -224,14 +232,20 @@ int Ethereum::putBatch(std::vector<PutOp>* data, TXID ) {
 
 }
 
-// todo: TXID
-int Ethereum::remove(ByteData *key, TXID ) {
+int Ethereum::remove(ByteData *key, TXID txid) {
 
     std::string hexKey = byteArrayToHex(key);
+    ByteData bdTxid(txid.data, 16);
+    std::string txidVal = byteArrayToHex(&bdTxid);
 
     RPCparams params;
     params.method = "eth_sendTransaction";
-    params.data = "0x95bc2673" + hexKey;
+
+    if(txid.is_nil()) {
+      params.data = "0x95bc2673" + hexKey;
+    } else {
+      params.data = "0xTODO" + hexKey + txidVal;
+    }
     // log("Data: " + params.data, "Remove");
 
     const std::string response = call(params, true);

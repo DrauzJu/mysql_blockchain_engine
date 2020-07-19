@@ -15,19 +15,42 @@ blockchain_table_tx::blockchain_table_tx(THD* thd, int hton_slot) {
 
   boost::uuids::random_generator gen;
   id = gen();
+
+  commitPrepareSuccess = true;
 }
 
-void blockchain_table_tx::addPut(PutOp data) {
-  applyPutOpToCache(data);
-  put_operations.emplace_back(std::move(data));
+void blockchain_table_tx::addPut(PutOp putOp, Connector* connector) {
+  // Send to blockchain tx buffer
+  auto thread = std::thread([&]() {
+    ByteData key(putOp.key.data->data(), putOp.key.data->size());
+    ByteData value(putOp.value.data->data(), putOp.value.data->size());
+    int rc = connector->put(&key, &value, id);
+
+    std::lock_guard lock(commitPrepareSuccessMtx);
+    commitPrepareSuccess = std::min(commitPrepareSuccess, rc == 0);
+  });
+  commitPrepareWorkers.emplace_back(std::move(thread));
+
+  applyPutOpToCache(putOp);
+  put_operations.emplace_back(std::move(putOp));
 }
 
-void blockchain_table_tx::addRemove(RemoveOp data, bool pending) {
+void blockchain_table_tx::addRemove(RemoveOp removeOp, bool pending, Connector* connector) {
+  // Send to blockchain tx buffer
+  auto thread = std::thread([&]() {
+    ByteData bd(removeOp.key.data->data(), removeOp.key.data->size());
+    int rc = connector->remove(&bd, id);
+
+    std::lock_guard lock(commitPrepareSuccessMtx);
+    commitPrepareSuccess = std::min(commitPrepareSuccess, rc == 0);
+  });
+  commitPrepareWorkers.emplace_back(std::move(thread));
+
   if(pending && pendingRemoveActivated) {
-    pending_remove_operations.push(std::move(data));
+    pending_remove_operations.push(std::move(removeOp));
   } else {
-    applyRemoveOpToCache(data);
-    remove_operations.emplace_back(std::move(data));
+    applyRemoveOpToCache(removeOp);
+    remove_operations.emplace_back(std::move(removeOp));
   }
 }
 
@@ -57,16 +80,23 @@ void blockchain_table_tx::reapplyPendingOperations() {
   }
 }
 
-void blockchain_table_tx::applyPendingRemoveOps() {
+void blockchain_table_tx::applyPendingRemoveOps(Connector* connector) {
   while (!pending_remove_operations.empty()) {
     auto pendingRemove = std::move(pending_remove_operations.front());
     pending_remove_operations.pop();
 
-    addRemove(pendingRemove,
-              false);  // adds it to full list and applies to cache
+    addRemove(pendingRemove, false, connector);  // adds it to full list and applies to cache
   }
 }
 
 boost::uuids::uuid blockchain_table_tx::getID() {
   return id;
+}
+
+bool blockchain_table_tx::waitForCommitPrepareWorkers() {
+  for(auto& thread : commitPrepareWorkers) {
+    if(thread.joinable()) thread.join();
+  }
+
+  return commitPrepareSuccess;
 }

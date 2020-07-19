@@ -1,27 +1,11 @@
 #ifndef MYSQL_BLOCKCHAIN_TABLE_TX_H
 #define MYSQL_BLOCKCHAIN_TABLE_TX_H
 
-// boost fix: https://github.com/boostorg/config/issues/322
-#ifndef __clang_major__
-#define __clang_major___WORKAROUND_GUARD 1
-#else
-#define __clang_major___WORKAROUND_GUARD 0
-#endif
-#define BOOST_FT_CC_IMPLICIT 0
-#define BOOST_FT_CC_CDECL 0
-#define BOOST_FT_CC_STDCALL 0
-#define BOOST_FT_CC_PASCAL 0
-#define BOOST_FT_CC_FASTCALL 0
-#define BOOST_FT_CC_CLRCALL 0
-#define BOOST_FT_CC_THISCALL 0
-#define BOOST_FT_CC_IMPLICIT_THISCALL 0
-
 #include <memory>
 #include <queue>
 #include <vector>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
 #include "types.h"
+#include "connector.h"
 
 #include <sql/sql_class.h>
 
@@ -33,10 +17,6 @@
  * so they have to be deferred to the end of the table scan (rnd_end()).
  */
 
-// todo: evaluate use of another data structure (like <tsl/hopscotch_map.h>)
-// requirements: allows random access and access by key
-using tx_cache_t = std::unordered_map<ManagedByteData, ManagedByteData>;
-
 // Transaction table for one table!
 class blockchain_table_tx {
  private:
@@ -44,6 +24,9 @@ class blockchain_table_tx {
   std::vector<RemoveOp> remove_operations;
   std::queue<RemoveOp> pending_remove_operations;
   TXID id;
+  std::vector<std::thread> commitPrepareWorkers;
+  std::mutex commitPrepareSuccessMtx;
+  bool commitPrepareSuccess;
 
   void applyPutOpToCache(PutOp& op);
   void applyRemoveOpToCache(RemoveOp& op);
@@ -55,13 +38,14 @@ class blockchain_table_tx {
 
   blockchain_table_tx(THD* thd, int hton_slot);
 
-  void addPut(PutOp data);
-  void addRemove(RemoveOp data, bool pending);
+  void addPut(PutOp putOp, Connector* connector);
+  void addRemove(RemoveOp removeOp, bool pending, Connector* connector);
   std::vector<PutOp>* getPutOperations();
   std::vector<RemoveOp>* getRemoveOperations();
   void reapplyPendingOperations();
-  void applyPendingRemoveOps();
+  void applyPendingRemoveOps(Connector* connector);
   TXID getID();
+  bool waitForCommitPrepareWorkers();
 
 };
 

@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
-#include "blockchain_table_tx.h"
+#include "types.h"
 
 /*
  * Interface definition to be used by storage engine to communicate with
@@ -24,12 +24,12 @@ class Connector {
   /*
    * returns 0 on success, 1 on failure
    */
-  virtual int put(ByteData* key, ByteData* value) = 0;
+  virtual int put(ByteData* key, ByteData* value, TXID txID = {{0}}) = 0;
 
   /*
    * returns 0 on success, 1 on failure
    */
-  virtual int putBatch(std::vector<PutOp> * data, TXID txID = {{0}}) = 0;
+  virtual int putBatch(std::vector<PutOp> * data) = 0;
 
   /*
    * returns 0 on success, 1 on failure

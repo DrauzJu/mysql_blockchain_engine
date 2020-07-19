@@ -316,7 +316,7 @@ int ha_blockchain::write_row(uchar *buf) {
     memcpy(putOp.key.data->data(), key.data, key.dataSize);
 
     auto bc_thd_data = ha_data_get(ha_thd(), table->alias);
-    bc_thd_data->tx->addPut(std::move(putOp));
+    bc_thd_data->tx->addPut(std::move(putOp), connector.get());
 
     return 0;
   } else {
@@ -405,7 +405,7 @@ int ha_blockchain::delete_row(const uchar *buf) {
 
     // If table scan cache is used, only add pending remove
     // --> allows to further iterate over cache without invalidating iterator pointers
-    bc_thd_data->tx->addRemove(std::move(removeOp), useTableScanCache());
+    bc_thd_data->tx->addRemove(std::move(removeOp), useTableScanCache(), connector.get());
 
     return 0;
   } else {
@@ -584,7 +584,7 @@ int ha_blockchain::rnd_end() {
   } else {
     auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
     if(useTableScanCache()) {
-      tx->applyPendingRemoveOps();
+      tx->applyPendingRemoveOps(connector.get());
       tx->pendingRemoveActivated = false;
     } else {
       // Higher isolation level is set --> do not use table scan cache --> clear it
@@ -940,14 +940,11 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
     return HA_ERR_WRONG_COMMAND;
   }
 
-  std::cout << "[BLOCKCHAIN - static] " << "In bc_commit" << std::endl; // DEBUG
-
   auto affectedTables = std::vector<TableName>();
   TXID txID;
 
   // For each table that took part in transaction, prepare commit
   for(auto& table_data : *ha_data_get_all(thd)) {
-    auto connector = table_data.second->connector;
     auto tx = std::move(table_data.second->tx);
 
     if(tx == nullptr) {
@@ -959,20 +956,8 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
     affectedTables.emplace_back(table_data.first);
     txID = tx->getID();
 
-    int successPrepare = 0;
-    if(!tx->getPutOperations()->empty()) {
-      int rc_putBatch = connector->putBatch(tx->getPutOperations(), tx->getID());
-      successPrepare = std::max(successPrepare, rc_putBatch);
-    }
-
-    for(auto& i : *tx->getRemoveOperations()) {
-      ByteData bd(i.key.data->data(), i.key.data->size());
-      int rc = connector->remove(&bd, tx->getID());
-      successPrepare = std::max(successPrepare, rc);
-    }
-
-    if(successPrepare != 0) {
-      std::cerr << "Prepare of commit failed, will undo preparation. "
+    if(!tx->waitForCommitPrepareWorkers()) {
+      std::cerr << "Prepare of commit failed, will undo preparation of all involved tables. "
                 << "Transaction is deleted, please create a new one! "
                 << std::endl;
       auto allHAData = ha_data_get_all(thd);
