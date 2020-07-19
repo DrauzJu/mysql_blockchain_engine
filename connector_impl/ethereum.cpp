@@ -99,8 +99,10 @@ static std::string parseParamsToJson(const RPCparams& params) {
 
 
 Ethereum::Ethereum(std::string connectionString,
-                   std::string contractAddress, std::string fromAddress, int maxWaitingTime) {
-    _contractAddress = std::move(contractAddress);
+                   std::string storeContractAddress,
+                   std::string fromAddress,
+                   int maxWaitingTime) {
+    _storeContractAddress = std::move(storeContractAddress);
     _fromAddress = std::move(fromAddress);
     _connectionString = std::move(connectionString);
     this->maxWaitingTime = maxWaitingTime * 1000; // convert to ms
@@ -110,7 +112,7 @@ Ethereum::Ethereum(std::string connectionString,
     curl_easy_setopt(curl, CURLOPT_URL, _connectionString.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
 
-    log("Contract Address: " + _contractAddress);
+    log("Contract Address: " + _storeContractAddress);
 }
 
 Ethereum::~Ethereum() {
@@ -190,7 +192,7 @@ int Ethereum::put(ByteData* key, ByteData* value, TXID txid) {
     }
 }
 
-int Ethereum::putBatch(std::vector<PutOp>* data) {
+int Ethereum::putBatch(std::vector<PutOp>* data, TXID txid) {
   auto size = data->size();
 
   std::stringstream dataString;
@@ -213,9 +215,18 @@ int Ethereum::putBatch(std::vector<PutOp>* data) {
     dataString << byteArrayToHex(&bd);
   }
 
+  ByteData bdTxid(txid.data, 16);
+  std::string txidVal = byteArrayToHex(&bdTxid);
+
   RPCparams params;
   params.method = "eth_sendTransaction";
-  params.data = "0x9b36675c" + dataString.str();
+
+  if(txid.is_nil()) {
+    params.data = "0x9b36675c" + dataString.str();
+  } else {
+    params.data = "0xTODO" + dataString.str() + txidVal;
+  }
+
   // log("Data: " + params.data, "PutBatch");
 
   const std::string response = call(params, true);
@@ -379,7 +390,7 @@ std::string Ethereum::call(RPCparams params, bool setGas) {
   std::string readBufferCall;
 
   params.from = _fromAddress;
-  params.to = _contractAddress;
+  if(params.to.empty()) params.to = _storeContractAddress;
   if(setGas) params.gas = "0x7A120";
 
   const std::string json = parseParamsToJson(params);
@@ -430,6 +441,6 @@ int Ethereum::clearCommitPrepare(boost::uuids::uuid ) {
 }
 
 // todo: Call Eth contract
-int Ethereum::atomicCommit(TXID , std::vector<std::string> ) {
+int Ethereum::atomicCommit(std::string , TXID , std::vector<std::string> ) {
   return 0;
 }

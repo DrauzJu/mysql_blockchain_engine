@@ -117,6 +117,7 @@ handlerton *blockchain_hton;
 static int config_type;
 static char* config_connection;
 static int config_use_ts_cache;
+static int config_tx_prepare_immediately;
 static char* config_eth_contracts;
 static char* config_eth_tx_contract;
 static char* config_eth_from;
@@ -945,6 +946,7 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
 
   // For each table that took part in transaction, prepare commit
   for(auto& table_data : *ha_data_get_all(thd)) {
+    auto connector = table_data.second->connector;
     auto tx = std::move(table_data.second->tx);
 
     if(tx == nullptr) {
@@ -956,7 +958,26 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
     affectedTables.emplace_back(table_data.first);
     txID = tx->getID();
 
-    if(!tx->waitForCommitPrepareWorkers()) {
+    int successPrepare = 0;
+
+    if(config_tx_prepare_immediately) {
+      // Only wait until preparation is done
+      successPrepare = tx->waitForCommitPrepareWorkers();
+    } else {
+      // Prepare commit using batch
+      if(!tx->getPutOperations()->empty()) {
+        int rc_putBatch = connector->putBatch(tx->getPutOperations(), tx->getID());
+        successPrepare = std::max(successPrepare, rc_putBatch);
+      }
+
+      for(auto& i : *tx->getRemoveOperations()) {
+        ByteData bd(i.key.data->data(), i.key.data->size());
+        int rc = connector->remove(&bd, tx->getID());
+        successPrepare = std::max(successPrepare, rc);
+      }
+    }
+
+    if(!successPrepare) {
       std::cerr << "Prepare of commit failed, will undo preparation of all involved tables. "
                 << "Transaction is deleted, please create a new one! "
                 << std::endl;
@@ -982,7 +1003,7 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
   }
 
   switch (config_type) {
-    case ETHEREUM: return Ethereum::atomicCommit(txID, addresses);
+    case ETHEREUM: return Ethereum::atomicCommit(config_eth_tx_contract, txID, addresses);
     default: return HA_ERR_WRONG_COMMAND;
   }
 }
@@ -1158,12 +1179,16 @@ static MYSQL_SYSVAR_INT(bc_use_ts_cache, config_use_ts_cache, 0,
                         "Blockchain use table scan cache", nullptr,
                         nullptr, 1,0, 1, 0);
 
+static MYSQL_SYSVAR_INT(bc_tx_prepare_immediately, config_tx_prepare_immediately, 0,
+                        "Blockchain transactions: immediately send operations to BC buffer", nullptr,
+                        nullptr, 0,0, 1, 0);
+
 static MYSQL_SYSVAR_STR(bc_eth_contracts, config_eth_contracts, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
-                        "Ethereum contract addresses", nullptr, nullptr,
+                        "Ethereum store contract addresses", nullptr, nullptr,
                         nullptr);
 
 static MYSQL_SYSVAR_STR(bc_eth_tx_contract, config_eth_tx_contract, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
-                        "Ethereum address for commit contract", nullptr, nullptr,
+                        "Ethereum commit contract address", nullptr, nullptr,
                         nullptr);
 
 static MYSQL_SYSVAR_STR(bc_eth_from, config_eth_from, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
@@ -1178,6 +1203,7 @@ static SYS_VAR *blockchain_system_variables[] = {
     MYSQL_SYSVAR(bc_type), // blockchain type: 0 - ethereum
     MYSQL_SYSVAR(bc_connection), // blockchain connection string (e.g. for Ethereum: http://127.0.0.1:8545)
     MYSQL_SYSVAR(bc_use_ts_cache), // 1 - yes, 0 - no
+    MYSQL_SYSVAR(bc_tx_prepare_immediately), // 1 - yes, 0 - no
     MYSQL_SYSVAR(bc_eth_contracts), // Concept: one contract per table, format: tableName1:contractAddress,tableName2:contractAddress,...
     MYSQL_SYSVAR(bc_eth_tx_contract),
     MYSQL_SYSVAR(bc_eth_from),

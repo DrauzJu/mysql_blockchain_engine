@@ -41,12 +41,14 @@ class Ethereum : public Connector {
 
 public:
     explicit Ethereum(std::string connectionString,
-                   std::string contractAddress, std::string fromAddress, int maxWaitingTime);
+                   std::string storeContractAddress,
+                   std::string fromAddress,
+                   int maxWaitingTime);
     ~Ethereum() override;
 
     int get(ByteData* key, unsigned char* buf, int value_size) override;
     int put(ByteData* key, ByteData* value, TXID txID) override;
-    int putBatch(std::vector<PutOp> * data) override;
+    int putBatch(std::vector<PutOp> * data, TXID txID) override;
     int remove(ByteData *key, TXID txID) override;
     void tableScanToVec(std::vector<ManagedByteData> &tuples, size_t keyLength, size_t valueLength) override;
     void tableScanToMap(tx_cache_t& tuples, size_t keyLength, size_t valueLength) override;
@@ -55,10 +57,10 @@ public:
 
     std::string call(RPCparams params, bool setGas);
     std::string checkMiningResult(std::string transactionID);
-    static int atomicCommit(TXID txID, std::vector<std::string> addresses);
+    static int atomicCommit(std::string commitContractAddress, TXID txID, std::vector<std::string> addresses);
 
    private:
-    std::string _contractAddress;
+    std::string _storeContractAddress;
     std::string _fromAddress;
     std::string _connectionString;
     size_t maxWaitingTime;
