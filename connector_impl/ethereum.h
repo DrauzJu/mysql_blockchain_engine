@@ -9,6 +9,12 @@
 #include <iostream>
 #include <regex>
 #include <string>
+#include <include/my_base.h>
+#include <boost/algorithm/string.hpp>
+#include <cmath>
+#include <iomanip>
+#include <thread>
+#include <utility>
 
 #include "json.hpp"
 
@@ -57,7 +63,11 @@ public:
 
     std::string call(RPCparams params, bool setGas);
     std::string checkMiningResult(std::string transactionID);
-    static int atomicCommit(std::string commitContractAddress, TXID txID, std::vector<std::string> addresses);
+    static int atomicCommit(std::string connectionString,
+                            std::string fromAddress,
+                            int maxWaitingTime,
+                            std::string commitContractAddress, TXID txID,
+                            const std::vector<std::string>& addresses);
 
    private:
     std::string _storeContractAddress;
@@ -65,6 +75,7 @@ public:
     std::string _connectionString;
     size_t maxWaitingTime;
     CURL *curl;
+    std::mutex curlCallMtx;
 
     std::vector <std::string> tableScanCall();
     static size_t getTableScanResultsSize(std::vector<std::string> response);

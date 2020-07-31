@@ -2,7 +2,7 @@ pragma solidity ^0.6.8;
 
 contract Transaction  {
 
-    function commit(
+    function commitAll(
         bytes16 txId,
         address[] memory stores)
     public

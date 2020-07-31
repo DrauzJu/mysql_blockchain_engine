@@ -510,17 +510,30 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
   if(useTableScanCache()) {
     auto& tx = ha_data_get(ha_thd(), table->alias)->tx;
 
-    // Copy key
-    memcpy(&(buf[pos]), keyBD.data, keyBD.dataSize);
-    pos += keyBD.dataSize;
+    // Ensure ts cache is filled
+    if(!tx->tableScanDataFilled) {
+      size_t value_size = table->s->reclength - key_size - table->s->null_bytes;
+      connector->tableScanToMap(tx->tableScanData, key_size, value_size);
+      tx->reapplyPendingOperations();
+      tx->tableScanDataFilled = true;
+    }
 
     // Create temp key
-    ManagedByteData tmpKey;
-    tmpKey.data->insert(tmpKey.data->begin(), keyBD.data, keyBD.data + keyBD.dataSize);
+    ManagedByteData tmpKey(keyBD.dataSize);
+    memcpy(tmpKey.data->data(), keyBD.data, keyBD.dataSize);
 
-    // Extract and copy value
-    auto value = tx->tableScanData[tmpKey];
-    memcpy(&buf[pos], value.data->data(), value.data->size());
+    // Search, extract and copy value
+    auto iter = tx->tableScanData.find(tmpKey);
+    if(iter != tx->tableScanData.end()) {
+      // Copy only if value was found
+
+      // Copy key
+      memcpy(&(buf[pos]), keyBD.data, keyBD.dataSize);
+      pos += keyBD.dataSize;
+
+      // Copy value
+      memcpy(&buf[pos], iter->second.data->data(), iter->second.data->size());
+    }
   } else {
     findConnector(table->alias);
     int valueSize = table->s->reclength - key_size - initial_null_bytes;
@@ -557,7 +570,6 @@ int ha_blockchain::rnd_init(bool) {
     if(useTableScanCache()) {
       tx->pendingRemoveActivated = true;
     } else {
-      // in a transaction, but with Isolation Level READ_COMMITTED --> do not use table scan cache
       tx->tableScanData.clear();
       tx->tableScanDataFilled = false;
     }
@@ -925,7 +937,9 @@ int ha_blockchain::start_transaction(THD *thd) {
 
   if(bc_ha_data->tx == nullptr) {
     std::lock_guard<std::mutex> lock(ha_data_create_tx_mtx);
-    bc_ha_data->tx = std::make_unique<blockchain_table_tx>(thd, blockchain_hton->slot);
+    bc_ha_data->tx = std::make_unique<blockchain_table_tx>(thd,
+                                                           blockchain_hton->slot,
+                                                           config_tx_prepare_immediately);
     log("Creating transaction and registering"); // DEBUG
 
     // register transaction in MySQL core
@@ -958,7 +972,7 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
     affectedTables.emplace_back(table_data.first);
     txID = tx->getID();
 
-    int successPrepare = 0;
+    bool successPrepare = true;
 
     if(config_tx_prepare_immediately) {
       // Only wait until preparation is done
@@ -967,13 +981,13 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
       // Prepare commit using batch
       if(!tx->getPutOperations()->empty()) {
         int rc_putBatch = connector->putBatch(tx->getPutOperations(), tx->getID());
-        successPrepare = std::max(successPrepare, rc_putBatch);
+        successPrepare = std::min(successPrepare, rc_putBatch == 0);
       }
 
       for(auto& i : *tx->getRemoveOperations()) {
         ByteData bd(i.key.data->data(), i.key.data->size());
         int rc = connector->remove(&bd, tx->getID());
-        successPrepare = std::max(successPrepare, rc);
+        successPrepare = std::min(successPrepare, rc == 0);
       }
     }
 
@@ -1003,7 +1017,13 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
   }
 
   switch (config_type) {
-    case ETHEREUM: return Ethereum::atomicCommit(config_eth_tx_contract, txID, addresses);
+    case ETHEREUM: {
+      return Ethereum::atomicCommit(std::string(config_connection),
+                                    std::string(config_eth_from),
+                                    config_eth_max_waiting_time,
+                                    std::string(config_eth_tx_contract),
+                                    txID, addresses);
+    }
     default: return HA_ERR_WRONG_COMMAND;
   }
 }
@@ -1023,8 +1043,11 @@ int ha_blockchain::bc_rollback(handlerton *, THD *thd, bool all) {
       continue;
     }
 
-    auto tableConnector = table_data.second->connector;
-    tableConnector->clearCommitPrepare(tx->getID());
+    if(config_tx_prepare_immediately) {
+      tx->waitForCommitPrepareWorkers(); // ensure threads shut down gracefully
+      auto tableConnector = table_data.second->connector;
+      tableConnector->clearCommitPrepare(tx->getID());
+    }
   }
 
   return 0;

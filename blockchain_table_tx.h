@@ -4,6 +4,7 @@
 #include <memory>
 #include <queue>
 #include <vector>
+#include <iomanip>
 #include "types.h"
 #include "connector.h"
 
@@ -27,6 +28,7 @@ class blockchain_table_tx {
   std::vector<std::thread> commitPrepareWorkers;
   std::mutex commitPrepareSuccessMtx;
   bool commitPrepareSuccess;
+  int prepareImmediately;
 
   void applyPutOpToCache(PutOp& op);
   void applyRemoveOpToCache(RemoveOp& op);
@@ -36,7 +38,7 @@ class blockchain_table_tx {
   bool tableScanDataFilled;
   bool pendingRemoveActivated;
 
-  blockchain_table_tx(THD* thd, int hton_slot);
+  blockchain_table_tx(THD* thd, int hton_slot, int prepare_immediately);
 
   void addPut(PutOp putOp, Connector* connector);
   void addRemove(RemoveOp removeOp, bool pending, Connector* connector);

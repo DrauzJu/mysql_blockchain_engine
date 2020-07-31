@@ -1,6 +1,6 @@
 #include "blockchain_table_tx.h"
 
-blockchain_table_tx::blockchain_table_tx(THD* thd, int hton_slot) {
+blockchain_table_tx::blockchain_table_tx(THD* thd, int hton_slot, int prepare_immediately) {
   // Get or create transaction ID
   auto ha_data_ptr = thd->get_ha_data(hton_slot);
   auto ha_data = static_cast<ha_data_map *>(ha_data_ptr->ha_ptr);
@@ -16,39 +16,54 @@ blockchain_table_tx::blockchain_table_tx(THD* thd, int hton_slot) {
   boost::uuids::random_generator gen;
   id = gen();
 
+  // log transaction id for debug purposes
+  /*std::cout << "New transaction: ";
+  for(int i=0; i<16; i++) {
+    std::cout << std::hex << std::setw(2) << std::setfill('0') << (int) id.data[i];
+  }
+  std::cout << std::endl;*/
+
+  tableScanDataFilled = false;
+  pendingRemoveActivated = false;
   commitPrepareSuccess = true;
+  prepareImmediately = prepare_immediately;
 }
 
 void blockchain_table_tx::addPut(PutOp putOp, Connector* connector) {
-  // Send to blockchain tx buffer
-  auto thread = std::thread([&]() {
-    ByteData key(putOp.key.data->data(), putOp.key.data->size());
-    ByteData value(putOp.value.data->data(), putOp.value.data->size());
-    int rc = connector->put(&key, &value, id);
+  if(prepareImmediately) {
+    // Send to blockchain tx buffer
+    auto thread = std::thread([&, putOp, connector]() {
+      ByteData key(putOp.key.data->data(), putOp.key.data->size());
+      ByteData value(putOp.value.data->data(), putOp.value.data->size());
+      int rc = connector->put(&key, &value, id);
 
-    std::lock_guard lock(commitPrepareSuccessMtx);
-    commitPrepareSuccess = std::min(commitPrepareSuccess, rc == 0);
-  });
-  commitPrepareWorkers.emplace_back(std::move(thread));
+      std::lock_guard lock(commitPrepareSuccessMtx);
+      commitPrepareSuccess = std::min(commitPrepareSuccess, rc == 0);
+    });
+    commitPrepareWorkers.emplace_back(std::move(thread));
+  }
 
   applyPutOpToCache(putOp);
   put_operations.emplace_back(std::move(putOp));
 }
 
 void blockchain_table_tx::addRemove(RemoveOp removeOp, bool pending, Connector* connector) {
-  // Send to blockchain tx buffer
-  auto thread = std::thread([&]() {
-    ByteData bd(removeOp.key.data->data(), removeOp.key.data->size());
-    int rc = connector->remove(&bd, id);
-
-    std::lock_guard lock(commitPrepareSuccessMtx);
-    commitPrepareSuccess = std::min(commitPrepareSuccess, rc == 0);
-  });
-  commitPrepareWorkers.emplace_back(std::move(thread));
-
   if(pending && pendingRemoveActivated) {
     pending_remove_operations.push(std::move(removeOp));
   } else {
+
+    if(prepareImmediately) {
+      // Send to blockchain tx buffer
+      auto thread = std::thread([&, removeOp, connector]() {
+        ByteData bd(removeOp.key.data->data(), removeOp.key.data->size());
+        int rc = connector->remove(&bd, id);
+
+        std::lock_guard lock(commitPrepareSuccessMtx);
+        commitPrepareSuccess = std::min(commitPrepareSuccess, rc == 0);
+      });
+      commitPrepareWorkers.emplace_back(std::move(thread));
+    }
+
     applyRemoveOpToCache(removeOp);
     remove_operations.emplace_back(std::move(removeOp));
   }
