@@ -978,16 +978,15 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
       // Only wait until preparation is done
       successPrepare = tx->waitForCommitPrepareWorkers();
     } else {
-      // Prepare commit using batch
+      // Prepare commit using batch operations
       if(!tx->getPutOperations()->empty()) {
         int rc_putBatch = connector->putBatch(tx->getPutOperations(), tx->getID());
         successPrepare = std::min(successPrepare, rc_putBatch == 0);
       }
 
-      for(auto& i : *tx->getRemoveOperations()) {
-        ByteData bd(i.key.data->data(), i.key.data->size());
-        int rc = connector->remove(&bd, tx->getID());
-        successPrepare = std::min(successPrepare, rc == 0);
+      if(!tx->getRemoveOperations()->empty()) {
+        int rc_removeBatch = connector->removeBatch(tx->getRemoveOperations(), tx->getID());
+        successPrepare = std::min(successPrepare, rc_removeBatch == 0);
       }
     }
 

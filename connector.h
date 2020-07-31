@@ -37,6 +37,11 @@ class Connector {
   virtual int remove(ByteData* key, TXID txID = {{0}}) = 0;
 
   /*
+   * returns 0 on success, 1 on failure
+   */
+  virtual int removeBatch(std::vector<RemoveOp> * data, TXID txID = {{0}}) = 0;
+
+  /*
    * Do a table scan, puts tuples in provided vector object (key+value concatenated)
    * --> faster than getting each KV-pair in an own transaction
    */

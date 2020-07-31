@@ -276,6 +276,10 @@ int Ethereum::remove(ByteData *key, TXID txid) {
     }
 }
 
+int removeBatch(std::vector<RemoveOp> * data, TXID txID) {
+  return 0;
+}
+
 void Ethereum::tableScanToVec(std::vector<ManagedByteData> &tuples,
                               const size_t keyLength, const size_t valueLength) {
 

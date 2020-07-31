@@ -56,6 +56,7 @@ public:
     int put(ByteData* key, ByteData* value, TXID txID) override;
     int putBatch(std::vector<PutOp> * data, TXID txID) override;
     int remove(ByteData *key, TXID txID) override;
+    int removeBatch(std::vector<RemoveOp> * data, TXID txID) override;
     void tableScanToVec(std::vector<ManagedByteData> &tuples, size_t keyLength, size_t valueLength) override;
     void tableScanToMap(tx_cache_t& tuples, size_t keyLength, size_t valueLength) override;
     int dropTable() override;
