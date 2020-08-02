@@ -7,13 +7,24 @@
 #else
 #define __clang_major___WORKAROUND_GUARD 0
 #endif
+#define BOOST_FT_CC_IMPLICIT 0
+#define BOOST_FT_CC_CDECL 0
+#define BOOST_FT_CC_STDCALL 0
+#define BOOST_FT_CC_PASCAL 0
+#define BOOST_FT_CC_FASTCALL 0
+#define BOOST_FT_CC_CLRCALL 0
+#define BOOST_FT_CC_THISCALL 0
+#define BOOST_FT_CC_IMPLICIT_THISCALL 0
 
 #include <iostream>
 #include <unordered_map>
 #include <boost/functional/hash.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
 
 using TableName = const char*;
 using byte = unsigned char;
+using TXID = boost::uuids::uuid;
 
 class Connector;
 class blockchain_table_tx;
@@ -74,6 +85,10 @@ class ManagedByteData {
 inline bool operator==(const ManagedByteData& lhs, const ManagedByteData& rhs) {
   return *(lhs.data.get()) == *(rhs.data.get());
 }
+
+// todo: evaluate use of another data structure (like <tsl/hopscotch_map.h>)
+// requirements: allows random access and access by key
+using tx_cache_t = std::unordered_map<ManagedByteData, ManagedByteData>;
 
 // Define hash function for ManagedByteData
 namespace std {

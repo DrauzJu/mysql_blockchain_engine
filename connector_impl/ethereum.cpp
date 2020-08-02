@@ -1,9 +1,8 @@
 #include "ethereum.h"
-#include <include/my_base.h>
-#include <cmath>
-#include <iomanip>
-#include <thread>
-#include <utility>
+
+/*
+ * ---- HELPER METHODS ----------------------------------
+ */
 
 void log(const std::string& msg, const std::string& method = "") {
     const std::string m = method.empty() ? "] " : "- " + method + "] ";
@@ -30,7 +29,7 @@ static void parse32ByteHexString(const std::string& s, uint8_t* out, size_t leng
     }
 }
 
-static std::string byteArrayToHex(ByteData* data) {
+static std::string byteArrayToHex(ByteData* data, int length=32) {
     assert(data->dataSize <= 32);
 
     std::stringstream ss;
@@ -39,7 +38,7 @@ static std::string byteArrayToHex(ByteData* data) {
     for (; i<data->dataSize; i++)
       ss << std::setw(2) << std::setfill('0') << (int) (data->data[i]);
 
-    for(; i<32; i++)
+    for(; i<length; i++)
       ss << std::setw(2) << std::setfill('0') << 0;
 
     return ss.str();
@@ -94,13 +93,15 @@ static std::string parseParamsToJson(const RPCparams& params) {
     return json + "}";
 }
 
-
-
-
+/*
+ * ---- ETHEREUM IMPLEMENTATION ----------------------------------
+ */
 
 Ethereum::Ethereum(std::string connectionString,
-                   std::string contractAddress, std::string fromAddress, int maxWaitingTime) {
-    _contractAddress = std::move(contractAddress);
+                   std::string storeContractAddress,
+                   std::string fromAddress,
+                   int maxWaitingTime) {
+    _storeContractAddress = std::move(storeContractAddress);
     _fromAddress = std::move(fromAddress);
     _connectionString = std::move(connectionString);
     this->maxWaitingTime = maxWaitingTime * 1000; // convert to ms
@@ -110,14 +111,14 @@ Ethereum::Ethereum(std::string connectionString,
     curl_easy_setopt(curl, CURLOPT_URL, _connectionString.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
 
-    log("Contract Address: " + _contractAddress);
+    log("Contract Address: " + _storeContractAddress);
 }
 
 Ethereum::~Ethereum() {
     curl_easy_cleanup(curl);
 }
 
-int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) {
+int Ethereum::get(ByteData* key, unsigned char* buf, int value_size) {
   std::string hexKey = byteArrayToHex(key);
 
   RPCparams params;
@@ -158,14 +159,23 @@ int Ethereum::get(TableName, ByteData* key, unsigned char* buf, int value_size) 
   }
 }
 
-int Ethereum::put(TableName, ByteData* key, ByteData* value) {
+int Ethereum::put(ByteData* key, ByteData* value, TXID txid) {
 
     std::string hexKey = byteArrayToHex(key);
     std::string hexVal = byteArrayToHex(value);
 
+    ByteData bdTxid(txid.data, 16);
+    std::string txidVal = byteArrayToHex(&bdTxid);
+
     RPCparams params;
     params.method = "eth_sendTransaction";
-    params.data = "0x4c667080" + hexKey + hexVal;
+
+    if(txid.is_nil()) {
+      params.data = "0x4c667080" + hexKey + hexVal;
+    } else {
+      params.data = "0x3c58dd03" + hexKey + hexVal + txidVal;
+    }
+
     // log("Data: " + params.data, "Put");
 
     const std::string response = call(params, true);
@@ -181,12 +191,20 @@ int Ethereum::put(TableName, ByteData* key, ByteData* value) {
     }
 }
 
-int Ethereum::putBatch(std::vector<PutOp>* data) {
+int Ethereum::putBatch(std::vector<PutOp>* data, TXID txid) {
   auto size = data->size();
 
   std::stringstream dataString;
-  dataString << uint32tToHex(64);
-  dataString << uint32tToHex(96 + 32 * size);
+  if(txid.is_nil()) {
+    dataString << uint32tToHex(64);
+    dataString << uint32tToHex(96 + 32 * size);
+  } else {
+    dataString << uint32tToHex(96);
+    dataString << uint32tToHex(128 + 32 * size);
+
+    ByteData bdTxid(txid.data, 16);
+    dataString << byteArrayToHex(&bdTxid);
+  }
 
   // All keys
   dataString << uint32tToHex(size); // number of keys
@@ -206,7 +224,13 @@ int Ethereum::putBatch(std::vector<PutOp>* data) {
 
   RPCparams params;
   params.method = "eth_sendTransaction";
-  params.data = "0x9b36675c" + dataString.str();
+
+  if(txid.is_nil()) {
+    params.data = "0x9b36675c" + dataString.str();
+  } else {
+    params.data = "0x0238a793" + dataString.str();
+  }
+
   // log("Data: " + params.data, "PutBatch");
 
   const std::string response = call(params, true);
@@ -223,13 +247,20 @@ int Ethereum::putBatch(std::vector<PutOp>* data) {
 
 }
 
-int Ethereum::remove(TableName, ByteData *key) {
+int Ethereum::remove(ByteData *key, TXID txid) {
 
     std::string hexKey = byteArrayToHex(key);
+    ByteData bdTxid(txid.data, 16);
+    std::string txidVal = byteArrayToHex(&bdTxid);
 
     RPCparams params;
     params.method = "eth_sendTransaction";
-    params.data = "0x95bc2673" + hexKey;
+
+    if(txid.is_nil()) {
+      params.data = "0x95bc2673" + hexKey;
+    } else {
+      params.data = "0x29a32c0a" + hexKey + txidVal;
+    }
     // log("Data: " + params.data, "Remove");
 
     const std::string response = call(params, true);
@@ -245,8 +276,7 @@ int Ethereum::remove(TableName, ByteData *key) {
     }
 }
 
-void Ethereum::tableScanToVec(TableName,
-                              std::vector<ManagedByteData> &tuples,
+void Ethereum::tableScanToVec(std::vector<ManagedByteData> &tuples,
                               const size_t keyLength, const size_t valueLength) {
 
   auto results = tableScanCall();
@@ -268,8 +298,7 @@ void Ethereum::tableScanToVec(TableName,
 
 }
 
-void Ethereum::tableScanToMap(TableName,
-                              tx_cache_t& tuples,
+void Ethereum::tableScanToMap(tx_cache_t& tuples,
                               size_t keyLength, size_t valueLength) {
 
   auto results = tableScanCall();
@@ -324,7 +353,7 @@ size_t Ethereum::getTableScanResultsSize(std::vector<std::string> response) {
   }
 }
 
-int Ethereum::dropTable(TableName ) {
+int Ethereum::dropTable() {
   // todo: implement: call function drop() of contract
   return 0;
 }
@@ -361,11 +390,10 @@ std::string Ethereum::checkMiningResult(std::string transactionID) {
 
 
 std::string Ethereum::call(RPCparams params, bool setGas) {
-
   std::string readBufferCall;
 
   params.from = _fromAddress;
-  params.to = _contractAddress;
+  if(params.to.empty()) params.to = _storeContractAddress;
   if(setGas) params.gas = "0x7A120";
 
   const std::string json = parseParamsToJson(params);
@@ -374,6 +402,7 @@ std::string Ethereum::call(RPCparams params, bool setGas) {
   // log("Body: " + postData, "Call");
 
   if (curl) {
+    std::lock_guard lock(curlCallMtx);
     struct curl_slist *headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
@@ -409,3 +438,84 @@ std::string Ethereum::call(RPCparams params, bool setGas) {
 
   return readBuffer;
 }
+
+int Ethereum::clearCommitPrepare(boost::uuids::uuid txid) {
+  ByteData bdTxid(txid.data, 16);
+  std::string txidVal = byteArrayToHex(&bdTxid);
+
+  RPCparams params;
+  params.method = "eth_sendTransaction";
+  params.data = "0x93ec62c1" + txidVal;
+  // log("Data: " + params.data, "clearCommitPrepare");
+
+  const std::string response = call(params, true);
+  // log("Response: " + response, "clearCommitPrepare");
+
+  if (response.find("error") == std::string::npos) {
+    log("success", "ClearTX");
+    return 0;
+  } else {
+    log("Failed: " + response, "ClearTX");
+    return 1;
+  }
+}
+
+int Ethereum::atomicCommit(std::string connectionString,
+                           std::string fromAddress,
+                           int maxWaitingTime,
+                           std::string commitContractAddress, TXID txID,
+                           const std::vector<std::string>& addresses) {
+  Ethereum ethInstance(std::move(connectionString), "",
+                       std::move(fromAddress), maxWaitingTime);
+
+  ByteData bdTxid(txID.data, 16);
+  std::string txidVal = byteArrayToHex(&bdTxid, 32);
+
+  std::stringstream addressString;
+  addressString << std::setw(64) << std::setfill('0') << "40"; // some magic Ethereum number
+  addressString << std::setw(64) << std::setfill('0') << addresses.size();
+  for(auto address : addresses) {
+    if(boost::starts_with(address, "0x")) {
+      address = address.substr(2);  // remove "0x" at beginning of address
+    }
+
+    boost::to_lower(address);
+    addressString << std::setw(64) << std::setfill('0') << address;
+  }
+
+  RPCparams params;
+  params.method = "eth_sendTransaction";
+  params.data = "0x334c1176" + txidVal + addressString.str();
+  params.to = std::move(commitContractAddress);
+
+  const std::string response = ethInstance.call(params, true);
+
+  if (response.find("error") == std::string::npos) {
+    log("success", "atomicCommit");
+    return 0;
+  } else {
+    log("Failed: " + response, "atomicCommit");
+    return 1;
+  }
+}
+
+/*
+ * {
+	"93ec62c1": "clean(bytes16)",
+	"8fcdc9a9": "commit(bytes16)",
+	"f751cd8f": "drop()",
+	"8eaa6ac0": "get(bytes32)",
+	"50a5fd68": "getBatch(bytes32[])",
+	"4c667080": "put(bytes32,bytes32)",
+	"3c58dd03": "put(bytes32,bytes32,bytes16)",
+	"9b36675c": "putBatch(bytes32[],bytes32[])",
+	"0238a793": "putBatch(bytes32[],bytes32[],bytes16)",
+	"95bc2673": "remove(bytes32)",
+	"29a32c0a": "remove(bytes32,bytes16)",
+	"b3055e26": "tableScan()"
+}
+
+{
+        "334c1176": "commitAll(bytes16,address[])"
+}
+ */

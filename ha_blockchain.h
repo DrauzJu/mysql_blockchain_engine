@@ -58,6 +58,7 @@ class ha_blockchain : public handler {
   std::unique_ptr<Connector> connector;
   std::vector<ManagedByteData> rndTableScanData;
   static std::mutex ha_data_create_mtx;
+  static std::mutex ha_data_create_tx_mtx;
 
  public:
   // Maps table name to contract address
@@ -255,7 +256,7 @@ class ha_blockchain : public handler {
   /** @brief
    * Logging helper
    */
-   void log(const std::string& msg);
+  void log(const std::string& msg);
 
   void findConnector(const char* tableName);
 

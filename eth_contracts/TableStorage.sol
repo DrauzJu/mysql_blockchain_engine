@@ -11,8 +11,15 @@ contract KVStore {
         bytes32 value;
     }
 
-    mapping(bytes32 => Value) private data; // data store
-    bytes32[] internal keyList;              // list of keys of data
+    struct TxOperation {
+        bytes32 key;
+        bytes32 value;
+        bool deleteEntry;
+    }
+
+    mapping(bytes32 => Value) private data;         // data store
+    bytes32[] internal keyList;                     // list of keys of data
+    mapping(bytes16 => TxOperation[]) private txBuffer; // buffer for transactions: maps transaction id to list of operations
 
     /// Store the pair key:value in the storage.
     /// @param key the new key to store
@@ -33,6 +40,40 @@ contract KVStore {
         data[key] = v;
     }
 
+    function put(
+        bytes32 key,
+        bytes32 value,
+        bytes16 txId)
+    public
+    {
+        TxOperation memory v = TxOperation(key,value, false);
+        txBuffer[txId].push(v);
+    }
+
+    function clean(
+        bytes16 txId)
+    public
+    {
+        delete txBuffer[txId];
+    }
+
+    function commit(
+        bytes16 txId)
+    external
+    {
+        TxOperation[] memory values = txBuffer[txId];
+
+        for (uint i = 0; i < values.length; i++) {
+            if(values[i].deleteEntry) {
+                remove(values[i].key);
+            } else {
+                put(values[i].key, values[i].value);
+            }
+        }
+
+        clean(txId);
+    }
+
     /// Stores multiplie key:value pairs in the storage.
     /// @param keys An array of keys to store
     /// @param values An array of values correpsonding to the keys,
@@ -51,6 +92,18 @@ contract KVStore {
             }
 
             data[keys[i]] = v;
+        }
+    }
+
+    function putBatch(
+        bytes32[] memory keys,
+        bytes32[] memory values,
+        bytes16 txId)
+    public
+    {
+        for (uint i = 0; i < keys.length; i++) {
+            TxOperation memory v = TxOperation(keys[i],values[i], false);
+            txBuffer[txId].push(v);
         }
     }
 
@@ -81,6 +134,37 @@ contract KVStore {
         delete data[key];
     }
 
+    function remove(
+        bytes32 key,
+        bytes16 txId)
+    public
+    {
+        TxOperation memory v = TxOperation(key, 0, true);
+        txBuffer[txId].push(v);
+    }
+
+    /// Removes multiple key:value pairs in the storage.
+    /// @param keys An array of keys to remove
+    function removeBatch(
+        bytes32[] memory keys)
+    public
+    {
+        for (uint i = 0; i < keys.length; i++) {
+            remove(keys[i]);
+        }
+    }
+
+    function removeBatch(
+        bytes32[] memory keys,
+        bytes16 txId)
+    public
+    {
+        for (uint i = 0; i < keys.length; i++) {
+            TxOperation memory v = TxOperation(keys[i], 0, true);
+            txBuffer[txId].push(v);
+        }
+    }
+
     function tableScan()
     public
     view
@@ -96,6 +180,17 @@ contract KVStore {
         }
 
         return (keys, values);
+    }
+
+    // For debugging only
+    function getFirstTxOp(bytes16 txid)
+    public
+    view
+    returns (bytes32 key, bytes32 value, bool deleteEntry)
+    {
+        key = txBuffer[txid][0].key;
+        value = txBuffer[txid][0].value;
+        deleteEntry = txBuffer[txid][0].deleteEntry;
     }
 
     function get(

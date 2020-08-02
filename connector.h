@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
-#include "blockchain_table_tx.h"
+#include "types.h"
 
 /*
  * Interface definition to be used by storage engine to communicate with
@@ -19,39 +19,44 @@ class Connector {
    * Write single KV-pair (concatenated) into byte buffer buf, starting at buf_write_index
    *
    */
-  virtual int get(TableName table, ByteData* key, unsigned char* buf, int value_size) = 0;
+  virtual int get(ByteData* key, unsigned char* buf, int value_size) = 0;
 
   /*
    * returns 0 on success, 1 on failure
    */
-  virtual int put(TableName table, ByteData* key, ByteData* value) = 0;
+  virtual int put(ByteData* key, ByteData* value, TXID txID = {{0}}) = 0;
 
   /*
    * returns 0 on success, 1 on failure
    */
-  virtual int putBatch(std::vector<PutOp> * data) = 0;
+  virtual int putBatch(std::vector<PutOp> * data, TXID txID = {{0}}) = 0;
 
   /*
    * returns 0 on success, 1 on failure
    */
-  virtual int remove(TableName table, ByteData* key) = 0;
+  virtual int remove(ByteData* key, TXID txID = {{0}}) = 0;
 
   /*
    * Do a table scan, puts tuples in provided vector object (key+value concatenated)
    * --> faster than getting each KV-pair in an own transaction
    */
-  virtual void tableScanToVec(TableName table, std::vector<ManagedByteData> &tuples, const size_t keyLength, const size_t valueLength) = 0;
+  virtual void tableScanToVec(std::vector<ManagedByteData> &tuples, const size_t keyLength, const size_t valueLength) = 0;
 
   /*
    * Do a table scan, puts tuples in provided map object (map key to value)
    * --> faster than getting each KV-pair in an own transaction
    */
-  virtual void tableScanToMap(TableName table, tx_cache_t& tuples, size_t keyLength, size_t valueLength) = 0;
+  virtual void tableScanToMap(tx_cache_t& tuples, size_t keyLength, size_t valueLength) = 0;
 
   /*
    * Drop table
    */
-  virtual int dropTable(TableName table) = 0;
+  virtual int dropTable() = 0;
+
+  /*
+   * Clear commit prepare buffer
+   */
+  virtual int clearCommitPrepare(boost::uuids::uuid txID) = 0;
 };
 
 #endif  // MYSQL_8_0_20_CONNECTOR_H

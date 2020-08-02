@@ -1,13 +1,21 @@
 #ifndef MYSQL_8_0_20_ETHEREUM_H
 #define MYSQL_8_0_20_ETHEREUM_H
 
-#include <iostream>
-#include <string>
-#include <regex>
-#include <cassert>
 #include <curl/curl.h>
+#include <storage/blockchain/connector.h>
+#include <storage/blockchain/blockchain_table_tx.h>
+#include <storage/blockchain/types.h>
+#include <cassert>
+#include <iostream>
+#include <regex>
+#include <string>
+#include <include/my_base.h>
+#include <boost/algorithm/string.hpp>
+#include <cmath>
+#include <iomanip>
+#include <thread>
+#include <utility>
 
-#include "../connector.h"
 #include "json.hpp"
 
 #define MINING_CHECK_INTERVAL 200
@@ -39,27 +47,35 @@ class Ethereum : public Connector {
 
 public:
     explicit Ethereum(std::string connectionString,
-                   std::string contractAddress, std::string fromAddress, int maxWaitingTime);
+                   std::string storeContractAddress,
+                   std::string fromAddress,
+                   int maxWaitingTime);
     ~Ethereum() override;
 
-    int get(TableName table, ByteData* key, unsigned char* buf, int value_size) override;
-    int put(TableName table, ByteData* key, ByteData* value) override;
-    int putBatch(std::vector<PutOp>* data) override;
-    int remove(TableName table, ByteData *key) override;
-    void tableScanToVec(TableName table, std::vector<ManagedByteData> &tuples, size_t keyLength, size_t valueLength) override;
-    void tableScanToMap(TableName table, tx_cache_t& tuples, size_t keyLength, size_t valueLength) override;
-    int dropTable(TableName table) override;
+    int get(ByteData* key, unsigned char* buf, int value_size) override;
+    int put(ByteData* key, ByteData* value, TXID txID) override;
+    int putBatch(std::vector<PutOp> * data, TXID txID) override;
+    int remove(ByteData *key, TXID txID) override;
+    void tableScanToVec(std::vector<ManagedByteData> &tuples, size_t keyLength, size_t valueLength) override;
+    void tableScanToMap(tx_cache_t& tuples, size_t keyLength, size_t valueLength) override;
+    int dropTable() override;
+    int clearCommitPrepare(boost::uuids::uuid txID) override;
 
     std::string call(RPCparams params, bool setGas);
     std::string checkMiningResult(std::string transactionID);
-    void updateMineCheckWaitingTime(int latestDurationMs);
+    static int atomicCommit(std::string connectionString,
+                            std::string fromAddress,
+                            int maxWaitingTime,
+                            std::string commitContractAddress, TXID txID,
+                            const std::vector<std::string>& addresses);
 
-private:
-    std::string _contractAddress;
+   private:
+    std::string _storeContractAddress;
     std::string _fromAddress;
     std::string _connectionString;
     size_t maxWaitingTime;
     CURL *curl;
+    std::mutex curlCallMtx;
 
     std::vector <std::string> tableScanCall();
     static size_t getTableScanResultsSize(std::vector<std::string> response);
