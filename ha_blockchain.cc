@@ -504,7 +504,7 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
   uint pos = initial_null_bytes;
 
   // Extract key
-  uint8_t key_size = (*(table->field))->pack_length();
+  uint8_t key_size = (*(table->field))->field_length;
   ByteData keyBD(const_cast<uchar*>(key), key_size);
 
   if(useTableScanCache()) {
@@ -559,7 +559,7 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
 */
 int ha_blockchain::rnd_init(bool) {
   Field* key_field = *(table->field);
-  size_t keyLength = key_field->pack_length();
+  size_t keyLength = key_field->field_length;
   size_t valueLength = table->s->reclength - keyLength - table->s->null_bytes;
 
   current_position = -1;
@@ -1055,7 +1055,15 @@ int ha_blockchain::bc_rollback(handlerton *, THD *thd, bool all) {
 /* Custom functions */
 
 void ha_blockchain::log(const std::string& msg) {
-  std::cout << "[BLOCKCHAIN - " << table->alias << "] " << msg << std::endl;
+  if(table) {
+    log(msg, table->alias);
+  } else {
+    log(msg, std::string().c_str());
+  }
+}
+
+void ha_blockchain::log(const std::string& msg, const char* tableName) {
+  std::cout << "[BLOCKCHAIN - " << tableName << "] " << msg << std::endl;
 }
 
 int ha_blockchain::find_current_row(uchar *buf) {
@@ -1119,7 +1127,7 @@ void ha_blockchain::extract_key(uchar *buf, ByteData* key) {
   Field* key_field = *(table->field);
 
   key->data = &(buf[initial_null_bytes]);
-  key->dataSize = key_field->pack_length();
+  key->dataSize = key_field->field_length;
 }
 
 void ha_blockchain::extract_value(uchar *buf, ulong key_size, ByteData* value) {
@@ -1131,14 +1139,18 @@ void ha_blockchain::extract_value(uchar *buf, ulong key_size, ByteData* value) {
 
 // Must be a separate function since has to be called at a different time depending on the operation
 // i.e. it can't be called e.g. in the constructor
-void ha_blockchain::findConnector(const char* tableName) {
+void ha_blockchain::findConnector(const char* fullTableName) {
   if(connector != nullptr) {
     return;
   }
 
+  std::vector<std::string> nameParts;
+  boost::split(nameParts, fullTableName, boost::is_any_of("/"));
+  std::string tableName = nameParts.back();
+
   switch(config_type) {
     case 0: {
-      auto searchAddress = ha_blockchain::tableContractInfo->find(std::string(tableName));
+      auto searchAddress = ha_blockchain::tableContractInfo->find(tableName);
       std::string contractAddress;
       if(searchAddress != ha_blockchain::tableContractInfo->end()) {
         contractAddress = searchAddress->second;
@@ -1160,7 +1172,7 @@ void ha_blockchain::findConnector(const char* tableName) {
 
   // save in THD data
   if(connector != nullptr) {
-    auto bc_ha_data = ha_data_get(ha_thd(), table->alias);
+    auto bc_ha_data = ha_data_get(ha_thd(), tableName.c_str());
     bc_ha_data->connector = connector.get();
     log("Stored connector in HA_DATA");
   }
