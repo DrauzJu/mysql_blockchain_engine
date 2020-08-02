@@ -276,6 +276,50 @@ int Ethereum::remove(ByteData *key, TXID txid) {
     }
 }
 
+int Ethereum::removeBatch(std::vector<RemoveOp> * data, TXID txid) {
+  auto size = data->size();
+
+  std::stringstream dataString;
+  if(txid.is_nil()) {
+    dataString << uint32tToHex(32);
+  } else {
+    dataString << uint32tToHex(64);
+
+    ByteData bdTxid(txid.data, 16);
+    dataString << byteArrayToHex(&bdTxid);
+  }
+
+  // All keys
+  dataString << uint32tToHex(size); // number of keys
+  for(ulong i=0; i<size; i++) {
+    auto& removeOp = data->at(i);
+    auto bd = ByteData(removeOp.key.data->data(), removeOp.key.data->size());
+    dataString << byteArrayToHex(&bd);
+  }
+
+  RPCparams params;
+  params.method = "eth_sendTransaction";
+
+  if(txid.is_nil()) {
+    params.data = "0x2d9bb756" + dataString.str();
+  } else {
+    params.data = "0x702de045" + dataString.str();
+  }
+
+  // log("Data: " + params.data, "removeBatch");
+
+  const std::string response = call(params, true);
+  // log("Response: " + response, "removeBatch");
+
+  if (response.find("error") == std::string::npos) {
+    log("success", "removeBatch");
+    return 0;
+  } else {
+    log("Failed: " + response, "removeBatch");
+    return 1;
+  }
+}
+
 void Ethereum::tableScanToVec(std::vector<ManagedByteData> &tuples,
                               const size_t keyLength, const size_t valueLength) {
 
@@ -512,6 +556,8 @@ int Ethereum::atomicCommit(std::string connectionString,
 	"0238a793": "putBatch(bytes32[],bytes32[],bytes16)",
 	"95bc2673": "remove(bytes32)",
 	"29a32c0a": "remove(bytes32,bytes16)",
+        "2d9bb756": "removeBatch(bytes32[])",
+        "702de045": "removeBatch(bytes32[],bytes16)",
 	"b3055e26": "tableScan()"
 }
 
