@@ -29,21 +29,32 @@ struct RPCparams {
   std::string gasPrice;
   std::string quantity_tag;
   std::string transactionID;
-  int id;
-  RPCparams() : id(1) {}
+  uint64 nonce;
+  RPCparams() : nonce(0) {}
 };
 
 
 struct TransactionConfirmationException : public std::exception
 {
   std::string msg;
+  std::string transaction;
 
-  TransactionConfirmationException(std::string msg): msg(std::move(msg)) {}
+  explicit TransactionConfirmationException(std::string msg, std::string transaction):
+      msg(std::move(msg)), transaction(std::move(transaction)) {}
 
   const char * what () const noexcept override
   {
     return msg.c_str();
   }
+};
+
+
+struct TransactionNonceException : public std::exception
+{
+    const char * what () const noexcept override
+    {
+        return "Transaction nonce is too low / already known";
+    }
 };
 
 
@@ -66,8 +77,9 @@ public:
     int dropTable() override;
     int clearCommitPrepare(boost::uuids::uuid txID) override;
 
-    std::string call(RPCparams params, bool setGas);
-    std::string checkMiningResult(std::string transactionID);
+    std::string call(RPCparams params, bool setGas, bool isRetry=false);
+    std::string call(std::string& params, std::string& method);
+    std::string checkMiningResult(std::string& transactionID);
     static int atomicCommit(std::string connectionString,
                             std::string fromAddress,
                             int maxWaitingTime,
@@ -81,6 +93,8 @@ public:
     size_t maxWaitingTime;
     CURL *curl;
     std::mutex curlCallMtx;
+    std::mutex nonceInitMtx;
+    static std::atomic_uint64_t nonce;
 
     std::vector <std::string> tableScanCall();
     static size_t getTableScanResultsSize(std::vector<std::string> response);

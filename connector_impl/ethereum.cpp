@@ -44,11 +44,11 @@ static std::string byteArrayToHex(ByteData* data, int length=32) {
     return ss.str();
 }
 
-
-static std::string uint32tToHex(uint32_t dec) {
+template<typename T>
+static std::string numericToHex(T num, int size=64) {
   std::stringstream ss;
   ss << std::hex;
-  ss << std::setw(64) << std::setfill('0') << dec;
+  ss << std::setw(size) << std::setfill('0') << num;
 
   return ss.str();
 }
@@ -71,11 +71,6 @@ static std::vector<std::string> Split(const std::string& str, int splitLength) {
 }
 
 static std::string parseParamsToJson(const RPCparams& params) {
-
-    if(!params.transactionID.empty()) {
-      return "\"" + params.transactionID + "\""; // only used for eth_getTransactionReceipt
-    }
-
     std::vector<std::string> els;
     std::string json = "{";
 
@@ -84,6 +79,12 @@ static std::string parseParamsToJson(const RPCparams& params) {
     if (!params.to.empty()) els.push_back(R"("to":")" + params.to + "\"");
     if (!params.gas.empty()) els.push_back(R"("gas":")" + params.gas + "\"");
     if (!params.gasPrice.empty()) els.push_back(R"("gasPrice":")" + params.gasPrice + "\"");
+    if (params.nonce > 0) {
+      std::stringstream ss;
+      ss << "0x";
+      ss << numericToHex(params.nonce, 0); // no leading zeros
+      els.push_back(R"("nonce":")" + ss.str() + "\"");
+    }
 
     for (std::vector<int>::size_type i = 0; i < els.size(); i++) {
         json += els[i];
@@ -112,6 +113,29 @@ Ethereum::Ethereum(std::string connectionString,
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
 
     log("Contract Address: " + _storeContractAddress);
+
+    // Init nonce
+    std::lock_guard<std::mutex> lock(nonceInitMtx);
+    if(Ethereum::nonce == 0) {
+      RPCparams params;
+      params.method = "eth_getTransactionCount";
+      params.quantity_tag = "latest";
+      std::string param = "\"" + _fromAddress + R"(", "latest")";
+      std::string method = "eth_getTransactionCount";
+
+      auto response = call(param, method);
+      try {
+        auto json = nlohmann::json::parse(response);
+        auto hexCount = json["result"].get<std::string>().substr(2); // remove 0x
+        auto tmpNonce = strtoul(hexCount.c_str(), nullptr, 16);
+        tmpNonce = std::max((ulong) 0, tmpNonce - 1); // nonce starts at 0
+        Ethereum::nonce.store(tmpNonce);
+      } catch (std::exception&) {
+        std::cerr << "[BLOCKCHAIN] - Can not parse eth_getTransactionCount response!" << std::endl;
+      }
+    }
+
+    log("Ethereum nonce is " + std::to_string(Ethereum::nonce.load()));
 }
 
 Ethereum::~Ethereum() {
@@ -196,18 +220,18 @@ int Ethereum::putBatch(std::vector<PutOp>* data, TXID txid) {
 
   std::stringstream dataString;
   if(txid.is_nil()) {
-    dataString << uint32tToHex(64);
-    dataString << uint32tToHex(96 + 32 * size);
+    dataString << numericToHex(64);
+    dataString << numericToHex(96 + 32 * size);
   } else {
-    dataString << uint32tToHex(96);
-    dataString << uint32tToHex(128 + 32 * size);
+    dataString << numericToHex(96);
+    dataString << numericToHex(128 + 32 * size);
 
     ByteData bdTxid(txid.data, 16);
     dataString << byteArrayToHex(&bdTxid);
   }
 
   // All keys
-  dataString << uint32tToHex(size); // number of keys
+  dataString << numericToHex(size); // number of keys
   for(ulong i=0; i<size; i++) {
     auto& putOp = data->at(i);
     auto bd = ByteData(putOp.key.data->data(), putOp.key.data->size());
@@ -215,7 +239,7 @@ int Ethereum::putBatch(std::vector<PutOp>* data, TXID txid) {
   }
 
   // All values
-  dataString << uint32tToHex(size); // number of values
+  dataString << numericToHex(size); // number of values
   for(ulong i=0; i<size; i++) {
     auto& putOp = data->at(i);
     auto bd = ByteData(putOp.value.data->data(), putOp.value.data->size());
@@ -281,16 +305,16 @@ int Ethereum::removeBatch(std::vector<RemoveOp> * data, TXID txid) {
 
   std::stringstream dataString;
   if(txid.is_nil()) {
-    dataString << uint32tToHex(32);
+    dataString << numericToHex(32);
   } else {
-    dataString << uint32tToHex(64);
+    dataString << numericToHex(64);
 
     ByteData bdTxid(txid.data, 16);
     dataString << byteArrayToHex(&bdTxid);
   }
 
   // All keys
-  dataString << uint32tToHex(size); // number of keys
+  dataString << numericToHex(size); // number of keys
   for(ulong i=0; i<size; i++) {
     auto& removeOp = data->at(i);
     auto bd = ByteData(removeOp.key.data->data(), removeOp.key.data->size());
@@ -402,16 +426,15 @@ int Ethereum::dropTable() {
   return 0;
 }
 
-std::string Ethereum::checkMiningResult(std::string transactionID) {
+std::string Ethereum::checkMiningResult(std::string& transactionID) {
   std::string response;
-  RPCparams rpcParams;
-  rpcParams.transactionID = std::move(transactionID);
-  rpcParams.method = "eth_getTransactionByHash";
   size_t waited = 0;
 
   while((waited + MINING_CHECK_INTERVAL) < this->maxWaitingTime) {
     std::this_thread::sleep_for (std::chrono::milliseconds (MINING_CHECK_INTERVAL));
-    response = call(rpcParams, false);
+    std::string transactionParam = "\"" + transactionID + "\"";
+    std::string method = "eth_getTransactionByHash";
+    response = call(transactionParam, method);
 
     try {
       nlohmann::json jsonResponse = nlohmann::json::parse(response);
@@ -422,10 +445,7 @@ std::string Ethereum::checkMiningResult(std::string transactionID) {
         log(msg.str(), "checkMiningResult");
         return response;
       }
-    } catch (nlohmann::json::parse_error& ) {
-      log("Can't parse " + response, "checkMiningResult");
-      // continue, so try again
-    } catch(nlohmann::json::type_error& ) {
+    } catch (nlohmann::detail::exception& ) {
       log("Can't parse " + response, "checkMiningResult");
       // continue, so try again
     }
@@ -438,20 +458,64 @@ std::string Ethereum::checkMiningResult(std::string transactionID) {
   msg << "Failed to get transaction block number after " << this->maxWaitingTime << " ms";
   log(msg.str());
 
-  throw TransactionConfirmationException("Transaction was not mined!");
+  throw TransactionConfirmationException("Transaction was not mined!", transactionID);
 }
 
 
-std::string Ethereum::call(RPCparams params, bool setGas) {
-  std::string readBufferCall;
-
+std::string Ethereum::call(RPCparams params, bool setGas, bool ) {
   params.from = _fromAddress;
   if(params.to.empty()) params.to = _storeContractAddress;
   if(setGas) params.gas = "0x7A120";
 
-  const std::string json = parseParamsToJson(params);
+  // Increment nonce to indicate that Ethereum should not replace a currently
+  // pending transaction, but add as new transaction
+  if(params.method == "eth_sendTransaction") params.nonce = ++nonce;
+
+  std::string json = parseParamsToJson(params);
   const std::string quantity_tag = params.quantity_tag.empty() ? "" : ",\"" + params.quantity_tag + "\"";
-  const std::string postData = R"({"jsonrpc":"2.0","id":)" + std::to_string(params.id) + R"(,"method":")" + params.method + R"(","params":[)" + json + quantity_tag + "]}";
+  json = json + quantity_tag;
+
+  std::string response;
+  try {
+    return call(json, params.method);
+  } catch (TransactionNonceException& ex) {
+    // Retry, which will increase nonce
+    log("Retrying ETH transaction with higher nonce", "Call");
+    return call(params, setGas, false);
+  } catch (TransactionConfirmationException& ex) {
+    return "error: " + std::string(ex.what());
+
+    // Idea: increase gas price and try again
+    // Currently does not work, since gas price of transaction is always 0
+    /*if(isRetry) {
+      // it also failed on retry --> exit
+      return "error: " + std::string(ex.what());
+    }
+
+    // Retry with higher gas price
+    std::string transactionParam = "\"" + ex.transaction + "\"";
+    std::string method = "eth_getTransactionByHash";
+    response = call(transactionParam, method);
+    ulong gasPrice;
+
+    try {
+      nlohmann::json jsonResponse = nlohmann::json::parse(response);
+      auto gasPriceHex = jsonResponse.at("result").at("gasPrice").get<std::string>();
+      gasPrice = strtoul(gasPriceHex.substr(2).c_str(), nullptr, 16);
+    } catch (nlohmann::detail::exception& ) {
+      log("Can't parse " + response, "Call");
+    }
+
+    log("Retrying ETH transaction with higher gas price", "Call");
+    gasPrice *= 1.2; // Increase gas price by 20%
+    params.gasPrice = "0x" + numericToHex(gasPrice, 0);
+    return call(params, setGas, true);*/
+  }
+}
+
+std::string Ethereum::call(std::string& params, std::string& method) {
+  std::string readBufferCall;
+  const std::string postData = R"({"jsonrpc":"2.0","id":1,"method":")" + method + R"(","params":[)" + params + "]}";
   // log("Body: " + postData, "Call");
 
   if (curl) {
@@ -472,17 +536,25 @@ std::string Ethereum::call(RPCparams params, bool setGas) {
   } else log("no curl", "Call");
 
   std::string readBuffer;
-  if(params.method == "eth_sendTransaction") {
+  if(method == "eth_sendTransaction") {
     try {
       nlohmann::json jsonResponse = nlohmann::json::parse(readBufferCall);
-      readBuffer = checkMiningResult(jsonResponse["result"]);
-    } catch (TransactionConfirmationException& e) {
-      readBuffer = "error: " + std::string(e.what());
-    } catch (nlohmann::json::parse_error& ) {
-      readBuffer = "error: Can not parse response from eth_sendTransaction, so unable to check MiningResult";
-      log("Error parsing call response: " + readBufferCall, "Call");
-    } catch(nlohmann::json::type_error& ) {
-      readBuffer = "error: Can not parse response from eth_sendTransaction, so unable to check MiningResult";
+
+      if(jsonResponse.contains("error")) {
+        auto errorMsg = jsonResponse.at("error").at("message").get<std::string>();
+        if(errorMsg == "already known" || errorMsg == "nonce too low") {
+          throw TransactionNonceException();
+        } else {
+          std::string msg = "Unknown transaction error: " + errorMsg;
+          log(msg, "Call");
+          readBuffer = "error: " + errorMsg;
+        }
+      } else {
+        auto result = jsonResponse["result"].get<std::string>();
+        readBuffer = checkMiningResult(result);
+      }
+    } catch (nlohmann::detail::exception& ) {
+      readBuffer = "error: Can not parse response from eth_sendTransaction, so unable to check mining result";
       log("Error parsing call response: " + readBufferCall, "Call");
     }
   } else {
