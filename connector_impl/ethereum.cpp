@@ -412,13 +412,20 @@ std::string Ethereum::checkMiningResult(std::string transactionID) {
   while((waited + MINING_CHECK_INTERVAL) < this->maxWaitingTime) {
     std::this_thread::sleep_for (std::chrono::milliseconds (MINING_CHECK_INTERVAL));
     response = call(rpcParams, false);
-    nlohmann::json jsonResponse = nlohmann::json::parse(response);
 
-    if(!(jsonResponse.at("result").at("blockNumber").is_null())) {
-      std::stringstream msg;
-      msg << "Mining took about " << waited << " ms";
-      log(msg.str(), "checkMiningResult");
-      return response;
+    try {
+      nlohmann::json jsonResponse = nlohmann::json::parse(response);
+
+      if(!(jsonResponse.at("result").at("blockNumber").is_null())) {
+        std::stringstream msg;
+        msg << "Mining took about " << waited << " ms";
+        log(msg.str(), "checkMiningResult");
+        return response;
+      }
+    } catch (nlohmann::json::parse_error& ) {
+      throw TransactionConfirmationException("Can't parse " + response);
+    } catch(nlohmann::json::type_error& ) {
+      throw TransactionConfirmationException("Can't parse " + response);
     }
 
     waited += MINING_CHECK_INTERVAL;
@@ -429,7 +436,7 @@ std::string Ethereum::checkMiningResult(std::string transactionID) {
   msg << "Failed to get transaction block number after " << this->maxWaitingTime << " ms";
   log(msg.str());
 
-  throw TransactionConfirmationException();
+  throw TransactionConfirmationException("Transaction was not mined!");
 }
 
 

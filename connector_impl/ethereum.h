@@ -36,9 +36,13 @@ struct RPCparams {
 
 struct TransactionConfirmationException : public std::exception
 {
+  std::string msg;
+
+  TransactionConfirmationException(std::string msg): msg(std::move(msg)) {}
+
   const char * what () const noexcept override
   {
-    return "Transaction was not mined!";
+    return msg.c_str();
   }
 };
 
