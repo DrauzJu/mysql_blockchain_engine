@@ -423,9 +423,11 @@ std::string Ethereum::checkMiningResult(std::string transactionID) {
         return response;
       }
     } catch (nlohmann::json::parse_error& ) {
-      throw TransactionConfirmationException("Can't parse " + response);
+      log("Can't parse " + response, "checkMiningResult");
+      // continue, so try again
     } catch(nlohmann::json::type_error& ) {
-      throw TransactionConfirmationException("Can't parse " + response);
+      log("Can't parse " + response, "checkMiningResult");
+      // continue, so try again
     }
 
     waited += MINING_CHECK_INTERVAL;
