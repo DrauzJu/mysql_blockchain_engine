@@ -62,7 +62,7 @@ class ha_blockchain : public handler {
 
  public:
   // Maps table name to contract address
-  static std::unordered_map<std::string, std::string>* tableContractInfo;
+  static std::unordered_map<TableName, std::string>* tableContractInfo;
 
   ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg);
   ~ha_blockchain();
@@ -269,7 +269,7 @@ class ha_blockchain : public handler {
 
   static std::unordered_map<std::string, std::string>* parseEthContractConfig(char* config);
 
-  static bc_ha_data_table_t* ha_data_get(THD* thd, TableName table);
+  static bc_ha_data_table_t* ha_data_get(THD* thd, TableName& table);
   static ha_data_map* ha_data_get_all(THD* thd);
 
   bool inTransaction();

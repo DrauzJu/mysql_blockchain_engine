@@ -22,7 +22,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 
-using TableName = const char*;
+using TableName = std::string;
 using byte = unsigned char;
 using TXID = boost::uuids::uuid;
 
