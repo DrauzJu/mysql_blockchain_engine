@@ -158,6 +158,7 @@ std::unordered_map<std::string, std::string>* ha_blockchain::tableContractInfo;
 std::mutex ha_blockchain::ha_data_create_mtx;
 std::mutex ha_blockchain::ha_data_create_tx_mtx;
 std::atomic_uint64_t Ethereum::nonce;
+std::mutex Ethereum::nonceInitMtx;
 
 ha_blockchain::ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg)
     : handler(hton, table_arg) {

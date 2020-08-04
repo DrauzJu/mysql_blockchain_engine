@@ -93,7 +93,7 @@ public:
     size_t maxWaitingTime;
     CURL *curl;
     std::mutex curlCallMtx;
-    std::mutex nonceInitMtx;
+    static std::mutex nonceInitMtx;
     static std::atomic_uint64_t nonce;
 
     std::vector <std::string> tableScanCall();

@@ -519,7 +519,7 @@ std::string Ethereum::call(std::string& params, std::string& method) {
   // log("Body: " + postData, "Call");
 
   if (curl) {
-    std::lock_guard lock(curlCallMtx);
+    std::lock_guard<std::mutex> lock(curlCallMtx);
     struct curl_slist *headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
