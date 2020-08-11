@@ -66,14 +66,6 @@ class Managed_byte_data {
     data = std::make_shared<std::vector<byte>>(size);
   }
 
-  Managed_byte_data(const Managed_byte_data* key, Managed_byte_data* value) {
-    data = std::make_shared<std::vector<byte>>();
-    data->reserve(key->data->size() + value->data->size());
-
-    data->insert( data->end(), key->data->begin(), key->data->end());
-    data->insert( data->end(), value->data->begin(), value->data->end());
-  }
-
   std::shared_ptr<std::vector<byte>> data;
 };
 

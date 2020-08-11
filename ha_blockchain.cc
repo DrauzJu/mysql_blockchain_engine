@@ -1083,8 +1083,10 @@ int ha_blockchain::find_current_row(uchar *buf) {
 
 int ha_blockchain::find_row(my_off_t index, uchar *buf) {
 
-  Byte_data data{};
-  std::unique_ptr<Managed_byte_data> tempBuffer;
+  // set required zero bits
+  uint initial_null_bytes = table->s->null_bytes;
+  memset(buf, 0, initial_null_bytes);
+  uint pos = initial_null_bytes;
 
   if(in_transaction()) {
     Table_name table_name(table->alias);
@@ -1093,28 +1095,24 @@ int ha_blockchain::find_row(my_off_t index, uchar *buf) {
       return HA_ERR_END_OF_FILE;
     }
 
-    auto pos = tx->table_scan_data.begin();
-    std::advance(pos, index);
-    auto* key = &(pos->first);
-    auto* value = &(pos->second);
-    tempBuffer = std::make_unique<Managed_byte_data>(key, value);
-    data = Byte_data(tempBuffer->data->data(), tempBuffer->data->size());
-  } else {
+    auto ts_pos = tx->table_scan_data.begin();
+    std::advance(ts_pos, index);
+    auto* key = &(ts_pos->first);
+    auto* value = &(ts_pos->second);
+    memcpy(&(buf[pos]), key->data->data(), key->data->size());
+    pos += key->data->size();
+    memcpy(&(buf[pos]), value->data->data(), value->data->size());
+    return 0;
+  }
+
+  // Not in transaction --> copy directly from rnd cache
     try {
       Managed_byte_data& mData = rnd_table_scan_data.at(index);
-      data = Byte_data(mData.data->data(), mData.data->size());
+    memcpy(&(buf[pos]), mData.data->data(), mData.data->size());
     } catch (const std::out_of_range&) {
       return HA_ERR_END_OF_FILE;
     }
-  }
 
-  // set required zero bits
-  uint initial_null_bytes = table->s->null_bytes;
-  memset(buf, 0, initial_null_bytes);
-  uint pos = initial_null_bytes;
-
-  // Copy data
-  memcpy(&(buf[pos]), data.data, data.data_size);
   return 0;
 }
 
