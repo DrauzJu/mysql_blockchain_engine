@@ -22,7 +22,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 
-using TableName = std::string;
+using Table_name = std::string;
 using byte = unsigned char;
 using TXID = boost::uuids::uuid;
 
@@ -33,45 +33,40 @@ enum BC_TYPE {
   ETHEREUM = 0
 };
 
-enum BC_ISOLATION_LEVEL {
-  READ_UNCOMMITTED = 0,
-  READ_COMMITTED = 1
-};
-
 typedef struct bc_ha_data_table_t {
   std::unique_ptr<blockchain_table_tx> tx;
   Connector* connector;
 } bc_ha_data_table_t;
 
-using ha_data_map = std::unordered_map<TableName, std::unique_ptr<bc_ha_data_table_t>>;
+using ha_data_map = std::unordered_map<Table_name, std::unique_ptr<bc_ha_data_table_t>>;
 
-class ByteData {
+class Byte_data {
  public:
-  ByteData() = default;
-  ByteData(byte* p_data, uint8_t p_dataSize) {
+  Byte_data() = default;
+  Byte_data(byte* p_data, uint8_t p_dataSize) {
     data = p_data;
-    dataSize = p_dataSize;
+    data_size = p_dataSize;
   }
 
   byte* data;
-  uint8_t dataSize;
+  uint8_t data_size;
 };
 
 /*
  * Should be used if data was allocated by storage engine (and not by MySQL core)
  * --> frees the data!
  */
-class ManagedByteData {
+class Managed_byte_data {
  public:
-  ManagedByteData() = default;
-  explicit ManagedByteData(std::shared_ptr<std::vector<byte>>& p_data) {
+  Managed_byte_data() = default;
+  explicit Managed_byte_data(std::shared_ptr<std::vector<byte>>& p_data) {
     data = p_data;
   }
-  explicit ManagedByteData(size_t size) {
+  explicit Managed_byte_data(size_t size) {
     data = std::make_shared<std::vector<byte>>(size);
   }
 
-  ManagedByteData(const ManagedByteData* key, ManagedByteData* value) {
+  Managed_byte_data(const Managed_byte_data* key, Managed_byte_data* value) {
     data = std::make_shared<std::vector<byte>>();
     data->reserve(key->data->size() + value->data->size());
 
@@ -82,38 +77,38 @@ class ManagedByteData {
   std::shared_ptr<std::vector<byte>> data;
 };
 
-inline bool operator==(const ManagedByteData& lhs, const ManagedByteData& rhs) {
+inline bool operator==(const Managed_byte_data& lhs, const Managed_byte_data& rhs) {
   return *(lhs.data.get()) == *(rhs.data.get());
 }
 
 // todo: evaluate use of another data structure (like <tsl/hopscotch_map.h>)
 // requirements: allows random access and access by key
-using tx_cache_t = std::unordered_map<ManagedByteData, ManagedByteData>;
+using tx_cache_t = std::unordered_map<Managed_byte_data, Managed_byte_data>;
 
 // Define hash function for ManagedByteData
 namespace std {
   template <>
-  struct hash<ManagedByteData>
+  struct hash<Managed_byte_data>
   {
-    std::size_t operator()(const ManagedByteData& k) const
+    std::size_t operator()(const Managed_byte_data& k) const
     {
       return boost::hash<std::vector<unsigned char>>()(*(k.data.get()));
     }
   };
 }
 
-class PutOp {
+class Put_op {
  public:
-  TableName table{};
-  ManagedByteData value;
-  ManagedByteData key;
+  Table_name table{};
+  Managed_byte_data value;
+  Managed_byte_data key;
 };
 
 
-class RemoveOp {
+class Remove_op {
  public:
-  TableName table{};
-  ManagedByteData key;
+  Table_name table{};
+  Managed_byte_data key;
 };
 
 #endif  // MYSQL_HABC_TYPES_H

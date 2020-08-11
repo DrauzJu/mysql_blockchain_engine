@@ -56,13 +56,12 @@
 class ha_blockchain : public handler {
   my_off_t current_position; // current position during table scan
   std::unique_ptr<Connector> connector;
-  std::vector<ManagedByteData> rndTableScanData;
-  static std::mutex ha_data_create_mtx;
+  std::vector<Managed_byte_data> rnd_table_scan_data;
   static std::mutex ha_data_create_tx_mtx;
 
  public:
   // Maps table name to contract address
-  static std::unordered_map<TableName, std::string>* tableContractInfo;
+  static std::unordered_map<Table_name, std::string>* table_contract_info;
 
   ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg);
   ~ha_blockchain();
@@ -121,7 +120,7 @@ class ha_blockchain : public handler {
     send. Return *real* limits of your storage engine here; MySQL will do
     min(your_limits, MySQL_limits) automatically.
    */
-  uint max_supported_record_length() const { return 200; } // todo: 64 does not work, check why
+  uint max_supported_record_length() const { return 200; }
 
   /** @brief
     unireg.cc will call this to make sure that the storage engine can handle
@@ -259,21 +258,22 @@ class ha_blockchain : public handler {
   inline void log(const std::string& msg);
   inline void log(const std::string& msg, const char* tableName);
 
-  void findConnector(const char* tableName);
+  void find_connector(const char* tableName);
 
   int find_current_row(uchar *buf);
   int find_row(my_off_t index, uchar *buf);
 
-  void extract_key(uchar* buf, ByteData* key);
-  void extract_value(uchar* buf, ulong key_size, ByteData* value);
+  void extract_key(uchar* buf, Byte_data* key);
+  void extract_value(uchar* buf, ulong key_size, Byte_data* value);
 
-  static std::unordered_map<std::string, std::string>* parseEthContractConfig(char* config);
-
-  static bc_ha_data_table_t* ha_data_get(THD* thd, TableName& table);
+  static std::unordered_map<std::string, std::string>* parse_eth_contract_config(char* config);
+  static inline void init_HAData(THD* thd);
+  static bc_ha_data_table_t* ha_data_get(THD* thd, Table_name& table);
   static ha_data_map* ha_data_get_all(THD* thd);
+  static int bc_close_connection(handlerton *hton, THD *thd);
 
-  bool inTransaction();
-  bool useTableScanCache();
+  bool in_transaction();
+  bool use_table_scan_cache();
 
   /** Commits a transaction or marks an SQL statement ended.*/
   int start_transaction(THD *thd);

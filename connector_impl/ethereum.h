@@ -20,26 +20,26 @@
 
 #define MINING_CHECK_INTERVAL 200
 
-struct RPCparams {
+struct RPC_params {
   std::string from;
   std::string to;
   std::string data;
   std::string method;
   std::string gas;
-  std::string gasPrice;
+  std::string gas_price;
   std::string quantity_tag;
-  std::string transactionID;
+  std::string transaction_ID;
   uint64 nonce;
-  RPCparams() : nonce(0) {}
+  RPC_params() : nonce(0) {}
 };
 
 
-struct TransactionConfirmationException : public std::exception
+struct Transaction_confirmation_exception : public std::exception
 {
   std::string msg;
   std::string transaction;
 
-  explicit TransactionConfirmationException(std::string msg, std::string transaction):
+  explicit Transaction_confirmation_exception(std::string msg, std::string transaction):
       msg(std::move(msg)), transaction(std::move(transaction)) {}
 
   const char * what () const noexcept override
@@ -49,7 +49,7 @@ struct TransactionConfirmationException : public std::exception
 };
 
 
-struct TransactionNonceException : public std::exception
+struct Transaction_nonce_exception : public std::exception
 {
     const char * what () const noexcept override
     {
@@ -61,43 +61,43 @@ struct TransactionNonceException : public std::exception
 class Ethereum : public Connector {
 
 public:
-    explicit Ethereum(std::string connectionString,
-                   std::string storeContractAddress,
-                   std::string fromAddress,
-                   int maxWaitingTime);
+    explicit Ethereum(std::string connection_string,
+                   std::string store_contract_address,
+                   std::string from_address,
+                   int max_waiting_time);
     ~Ethereum() override;
 
-    int get(ByteData* key, unsigned char* buf, int value_size) override;
-    int put(ByteData* key, ByteData* value, TXID txID) override;
-    int putBatch(std::vector<PutOp> * data, TXID txID) override;
-    int remove(ByteData *key, TXID txID) override;
-    int removeBatch(std::vector<RemoveOp> * data, TXID txID) override;
-    void tableScanToVec(std::vector<ManagedByteData> &tuples, size_t keyLength, size_t valueLength) override;
-    void tableScanToMap(tx_cache_t& tuples, size_t keyLength, size_t valueLength) override;
-    int dropTable() override;
-    int clearCommitPrepare(boost::uuids::uuid txID) override;
+    int get(Byte_data* key, unsigned char* buf, int value_size) override;
+    int put(Byte_data* key, Byte_data* value, TXID txID) override;
+    int put_batch(std::vector<Put_op> * data, TXID txID) override;
+    int remove(Byte_data *key, TXID txID) override;
+    int remove_batch(std::vector<Remove_op> * data, TXID txID) override;
+    void table_scan_to_vec(std::vector<Managed_byte_data> &tuples, size_t key_length, size_t value_length) override;
+    void table_scan_to_map(tx_cache_t& tuples, size_t key_kength, size_t value_length) override;
+    int drop_table() override;
+    int clear_commit_prepare(boost::uuids::uuid tx_ID) override;
 
-    std::string call(RPCparams params, bool setGas, bool isRetry=false);
+    std::string call(RPC_params params, bool set_gas);
     std::string call(std::string& params, std::string& method);
-    std::string checkMiningResult(std::string& transactionID);
-    static int atomicCommit(std::string connectionString,
-                            std::string fromAddress,
-                            int maxWaitingTime,
-                            std::string commitContractAddress, TXID txID,
+    std::string check_mining_result(std::string& transaction_ID);
+    static int atomic_commit(std::string connection_string,
+                            std::string from_address,
+                            int max_waiting_time,
+                            std::string commit_contract_address, TXID tx_ID,
                             const std::vector<std::string>& addresses);
 
    private:
-    std::string _storeContractAddress;
-    std::string _fromAddress;
-    std::string _connectionString;
-    size_t maxWaitingTime;
+    std::string _store_contract_address;
+    std::string _from_address;
+    std::string _connection_string;
+    size_t max_waiting_time;
     CURL *curl;
-    std::mutex curlCallMtx;
-    static std::mutex nonceInitMtx;
+    std::mutex curl_call_mtx;
+    static std::mutex nonce_init_mtx;
     static std::atomic_uint64_t nonce;
 
-    std::vector <std::string> tableScanCall();
-    static size_t getTableScanResultsSize(std::vector<std::string> response);
+    std::vector <std::string> table_scan_call();
+    static size_t get_table_scan_results_size(std::vector<std::string> response);
 };
 
 #endif  // MYSQL_8_0_20_ETHEREUM_H

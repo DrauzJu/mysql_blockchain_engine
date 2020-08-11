@@ -21,33 +21,34 @@
 // Transaction table for one table!
 class blockchain_table_tx {
  private:
-  std::vector<PutOp> put_operations;
-  std::vector<RemoveOp> remove_operations;
-  std::queue<RemoveOp> pending_remove_operations;
+  std::vector<Put_op> put_operations;
+  std::vector<Remove_op> remove_operations;
+  std::queue<Remove_op> pending_remove_operations;
   TXID id;
-  std::vector<std::thread> commitPrepareWorkers;
-  std::mutex commitPrepareSuccessMtx;
-  bool commitPrepareSuccess;
-  int prepareImmediately;
+  std::vector<std::thread> commit_prepare_workers;
+  std::mutex commit_prepare_success_mtx;
+  bool commit_prepare_success;
+  int prepare_immediately;
 
-  void applyPutOpToCache(PutOp& op);
-  void applyRemoveOpToCache(RemoveOp& op);
+  void apply_put_op_to_cache(Put_op& op);
+  void apply_remove_op_to_cache(Remove_op& op);
 
  public:
-  tx_cache_t tableScanData;
-  bool tableScanDataFilled;
-  bool pendingRemoveActivated;
+  tx_cache_t table_scan_data;
+  bool table_scan_data_filled;
+  bool pending_remove_activated;
 
   blockchain_table_tx(THD* thd, int hton_slot, int prepare_immediately);
 
-  void addPut(PutOp putOp, Connector* connector);
-  void addRemove(RemoveOp removeOp, bool pending, Connector* connector);
-  std::vector<PutOp>* getPutOperations();
-  std::vector<RemoveOp>* getRemoveOperations();
-  void reapplyPendingOperations();
-  void applyPendingRemoveOps(Connector* connector);
-  TXID getID();
-  bool waitForCommitPrepareWorkers();
+  void add_put(Put_op putOp, Connector* connector);
+  void add_remove(Remove_op removeOp, bool pending, Connector* connector);
+  std::vector<Put_op>* get_put_operations();
+  std::vector<Remove_op>* get_remove_operations();
+  void reapply_pending_operations();
+  void apply_pending_remove_ops(Connector* connector);
+  TXID get_ID();
+  bool wait_for_commit_prepare_workers();
+  bool is_read_only();
 
 };
 
