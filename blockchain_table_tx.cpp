@@ -5,13 +5,6 @@ blockchain_table_tx::blockchain_table_tx(THD* thd, int hton_slot, int prepare_im
   auto ha_data_ptr = thd->get_ha_data(hton_slot);
   auto ha_data = static_cast<ha_data_map *>(ha_data_ptr->ha_ptr);
 
-  // log transaction id for debug purposes
-  /*std::cout << "New transaction: ";
-  for(int i=0; i<16; i++) {
-    std::cout << std::hex << std::setw(2) << std::setfill('0') << (int) id.data[i];
-  }
-  std::cout << std::endl;*/
-
   table_scan_data_filled = false;
   pending_remove_activated = false;
   commit_prepare_success = true;
@@ -27,6 +20,17 @@ blockchain_table_tx::blockchain_table_tx(THD* thd, int hton_slot, int prepare_im
 
   boost::uuids::random_generator gen;
   id = gen();
+
+  // log transaction id for debug purposes
+  // std::cout << "Creating TX: " + get_printable_id() + "\n";
+}
+
+blockchain_table_tx::~blockchain_table_tx() {
+  wait_for_commit_prepare_workers();
+  commit_prepare_workers.clear();
+
+  // log transaction id for debug purposes
+  // std::cout << "Deleting TX: " + get_printable_id() + "\n";
 }
 
 void blockchain_table_tx::add_put(Put_op putOp, Connector* connector) {
@@ -106,6 +110,15 @@ void blockchain_table_tx::apply_pending_remove_ops(Connector* connector) {
 
 boost::uuids::uuid blockchain_table_tx::get_ID() {
   return id;
+}
+
+std::string blockchain_table_tx::get_printable_id() {
+  std::stringstream ss;
+  for(int i=0; i<16; i++) {
+    ss << std::hex << std::setw(2) << std::setfill('0') << (int) id.data[i];
+  }
+  
+  return ss.str();
 }
 
 bool blockchain_table_tx::wait_for_commit_prepare_workers() {

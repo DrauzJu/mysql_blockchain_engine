@@ -985,12 +985,14 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
         std::cout << "[BLOCKCHAIN] Preparing commit with " << tx->get_put_operations()->size() << " put operations" << std::endl;
         int rc_putBatch = connector->put_batch(tx->get_put_operations(), tx->get_ID());
         success_prepare = std::min(success_prepare, rc_putBatch == 0);
+        tx->get_put_operations()->clear();
       }
 
       if(!tx->get_remove_operations()->empty()) {
         std::cout << "[BLOCKCHAIN] Preparing commit with " << tx->get_remove_operations()->size() << " remove operations" << std::endl;
         int rc_removeBatch = connector->remove_batch(tx->get_remove_operations(), tx->get_ID());
         success_prepare = std::min(success_prepare, rc_removeBatch == 0);
+        tx->get_remove_operations()->clear();
       }
     }
 
@@ -1106,12 +1108,12 @@ int ha_blockchain::find_row(my_off_t index, uchar *buf) {
   }
 
   // Not in transaction --> copy directly from rnd cache
-    try {
-      Managed_byte_data& mData = rnd_table_scan_data.at(index);
+  try {
+    Managed_byte_data& mData = rnd_table_scan_data.at(index);
     memcpy(&(buf[pos]), mData.data->data(), mData.data->size());
-    } catch (const std::out_of_range&) {
-      return HA_ERR_END_OF_FILE;
-    }
+  } catch (const std::out_of_range&) {
+    return HA_ERR_END_OF_FILE;
+  }
 
   return 0;
 }

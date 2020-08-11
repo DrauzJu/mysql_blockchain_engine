@@ -32,6 +32,7 @@ class blockchain_table_tx {
 
   void apply_put_op_to_cache(Put_op& op);
   void apply_remove_op_to_cache(Remove_op& op);
+  std::string get_printable_id();
 
  public:
   tx_cache_t table_scan_data;
@@ -39,6 +40,7 @@ class blockchain_table_tx {
   bool pending_remove_activated;
 
   blockchain_table_tx(THD* thd, int hton_slot, int prepare_immediately);
+  ~blockchain_table_tx();
 
   void add_put(Put_op putOp, Connector* connector);
   void add_remove(Remove_op removeOp, bool pending, Connector* connector);
