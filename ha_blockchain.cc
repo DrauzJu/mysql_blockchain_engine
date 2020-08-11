@@ -138,6 +138,7 @@ static int blockchain_init_func(void *p) {
   blockchain_hton->is_supported_system_table = blockchain_is_supported_system_table;
   blockchain_hton->commit = ha_blockchain::bc_commit;
   blockchain_hton->rollback = ha_blockchain::bc_rollback;
+  blockchain_hton->close_connection = ha_blockchain::bc_close_connection;
 
   // Comment: blockchain_hton->prepare is not set 
   // --> Two-Phase Commit is not supported by this storage engine
@@ -165,13 +166,7 @@ std::mutex Ethereum::nonce_init_mtx;
 ha_blockchain::ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg)
     : handler(hton, table_arg) {
   // ensure connection-scoped data structures are initialized
-  auto ha_data = ha_thd()->get_ha_data(hton->slot);
-
-  std::lock_guard<std::mutex> lock(ha_data_create_mtx);
-  auto bc_ha_data = static_cast<ha_data_map *>(ha_data->ha_ptr);
-
-  if(bc_ha_data == nullptr) {
-    ha_data->ha_ptr = new ha_data_map;
+  init_HAData(ha_thd());
 }
 
 ha_blockchain::~ha_blockchain() = default;
@@ -944,6 +939,9 @@ int ha_blockchain::start_transaction(THD *thd) {
     // register transaction in MySQL core
     // See sql/handler.cc for details
     trans_register_ha(thd, true, blockchain_hton, nullptr);
+
+    // If a transaction exists, enusre also that a corresponding connector object is available in THD data
+    bc_ha_data->connector = connector.get();
   }
 
   return 0;
@@ -965,6 +963,10 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
 
     if(tx == nullptr) {
       // transaction did not touch this table --> continue
+      continue;
+    }
+
+    if(tx->is_read_only()) {
       continue;
     }
 
@@ -1181,31 +1183,59 @@ void ha_blockchain::find_connector(const char* full_table_name) {
   if(connector != nullptr) {
     auto bc_ha_data = ha_data_get(ha_thd(), table_name);
     bc_ha_data->connector = connector.get();
-    log("Stored connector in HA_DATA for " + tableName);
+    log("Stored connector in HA_DATA for " + table_name);
   }
 }
 
-bc_ha_data_table_t* ha_blockchain::ha_data_get(THD* thd, TableName& table) {
+void ha_blockchain::init_HAData(THD* thd) {
   auto ha_data = thd->get_ha_data(blockchain_hton->slot);
-  auto tableMap = static_cast<ha_data_map *>(ha_data->ha_ptr);
 
-  auto tableData = tableMap->find(table);
-  if(tableData == tableMap->end()) {
+  // fast exit to avoid mutex locking
+  if(ha_data->ha_ptr != nullptr) {
+    return;
+  }  
+
+  mysql_mutex_lock(&thd->LOCK_thd_data);
+
+  // Check again to ensure is thread-safe
+  if(ha_data->ha_ptr == nullptr) {
+    ha_data->ha_ptr = new ha_data_map;
+  }
+
+  mysql_mutex_unlock(&thd->LOCK_thd_data);
+}
+
+bc_ha_data_table_t* ha_blockchain::ha_data_get(THD* thd, Table_name& table) {
+  init_HAData(thd);
+  auto ha_data = thd->get_ha_data(blockchain_hton->slot);
+  auto table_map = static_cast<ha_data_map *>(ha_data->ha_ptr);
+
+  auto table_data = table_map->find(table);
+  if(table_data == table_map->end()) {
     auto ha_table_data_ptr = std::make_unique<bc_ha_data_table_t>();
     auto ha_table_data = ha_table_data_ptr.get();
-    tableMap->insert({table, std::move(ha_table_data_ptr)});
+    table_map->insert({table, std::move(ha_table_data_ptr)});
     return ha_table_data;
   }
 
-  return tableData->second.get();
+  return table_data->second.get();
 }
 
 ha_data_map* ha_blockchain::ha_data_get_all(THD* thd) {
+  init_HAData(thd);
   auto ha_data = thd->get_ha_data(blockchain_hton->slot);
   return static_cast<ha_data_map *>(ha_data->ha_ptr);
 }
 
-bool ha_blockchain::inTransaction() {
+int ha_blockchain::bc_close_connection(handlerton *hton, THD *thd) {
+
+  std::cout << "[BLOCKCHAIN] Closing connection with THD ID " << thd->thread_id() << std::endl;
+
+  // Free HA Data Map
+  auto ha_data = thd->get_ha_data(hton->slot);
+  delete static_cast<ha_data_map *>(ha_data->ha_ptr);
+  return 0;
+}
 
 bool ha_blockchain::in_transaction() {
   return thd_test_options(ha_thd(), (OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN ));
