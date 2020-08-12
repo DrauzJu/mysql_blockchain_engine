@@ -8,7 +8,7 @@ blockchain_table_tx::blockchain_table_tx(THD* thd, int hton_slot, int prepare_im
   table_scan_data_filled = false;
   pending_remove_activated = false;
   commit_prepare_success = true;
-  prepare_immediately = prepare_immediately;
+  this->prepare_immediately = prepare_immediately;
 
   // Check if a table_tx object already exists: if yes, copy transaction ID
   for(auto& table_tx : *ha_data) {
