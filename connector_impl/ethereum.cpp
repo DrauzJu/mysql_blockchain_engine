@@ -353,6 +353,8 @@ void Ethereum::table_scan_to_vec(std::vector<Managed_byte_data> &tuples,
     return;
   }
 
+  log("success", "table_scan_to_vec");
+
   for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
     std::vector<int>::size_type value_index = i + count + 1;
 
@@ -374,6 +376,8 @@ void Ethereum::table_scan_to_map(tx_cache_t& tuples,
   if(count == 0) {
     return;
   }
+
+  log("success", "table_scan_to_map");
 
   for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
     std::vector<int>::size_type valueIndex = i + count + 1;

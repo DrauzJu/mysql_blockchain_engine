@@ -593,7 +593,7 @@ int ha_blockchain::rnd_end() {
       tx->apply_pending_remove_ops(connector.get());
       tx->pending_remove_activated = false;
     } else {
-      // Higher isolation level is set --> do not use table scan cache --> clear it
+      // Do not use table scan cache --> clear it
       tx->table_scan_data.clear();
     }
   }

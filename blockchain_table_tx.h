@@ -11,8 +11,8 @@
 #include <sql/sql_class.h>
 
 /*
- * The tableScanData is also used during UPDATES and DELETES to find matching tuples.
- * We need to ensure that the tableScanData remains usable during one table scan even if
+ * The table_scan_data is also used during UPDATES and DELETES to find matching tuples.
+ * We need to ensure that the table_scan_data remains usable during one table scan even if
  * UPDATES and DELETES happen in place. For UPDATES this is not a problem, since
  * std::unordered_map is not re-hashed. But DELETES would invalid the iterator,
  * so they have to be deferred to the end of the table scan (rnd_end()).
