@@ -16,7 +16,7 @@ class Connector {
   virtual ~Connector() {}
 
   /*
-   * Write single KV-pair (concatenated) into byte buffer buf, starting at buf_write_index
+   * Write single KV-pair (concatenated) into byte buffer buf
    *
    */
   virtual int get(Byte_data* key, unsigned char* buf, int value_size) = 0;

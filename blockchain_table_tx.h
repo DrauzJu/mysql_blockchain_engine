@@ -35,6 +35,9 @@ class blockchain_table_tx {
   std::string get_printable_id();
 
  public:
+  /*
+    If the transaction cache is in use, read every tuple max. one time to avoid non-repeatable read and phantom read anomaly
+  */
   tx_cache_t table_scan_data;
   bool table_scan_data_filled;
   bool pending_remove_activated;

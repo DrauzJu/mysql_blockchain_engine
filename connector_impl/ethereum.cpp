@@ -169,7 +169,6 @@ int Ethereum::get(Byte_data* key, unsigned char* buf, int value_size) {
       memcpy(&(buf[0]), key->data, key->data_size);
 
       // Extract value and save in buf
-      std::vector<uint8_t> value(value_size);
       parse_32byte_hex_string(result, &(buf[key->data_size]), value_size);
 
       return 0;
@@ -354,6 +353,7 @@ void Ethereum::table_scan_to_vec(std::vector<Managed_byte_data> &tuples,
   }
 
   log("success", "table_scan_to_vec");
+  tuples.reserve(count);
 
   for (std::vector<int>::size_type i = 3; i < 3 + count; i++) {
     std::vector<int>::size_type value_index = i + count + 1;
@@ -388,7 +388,8 @@ void Ethereum::table_scan_to_map(tx_cache_t& tuples,
     parse_32byte_hex_string(results[i], key.data->data(), key_length);
     parse_32byte_hex_string(results[valueIndex], value.data->data(), value_length);
 
-    tuples[key] = std::move(value);
+    //IMPORTANT: Only insert if value does not exist yet --> ensure data is read only once (--> anomalies)
+    tuples.emplace(key, std::move(value));
   }
 }
 

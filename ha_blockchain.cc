@@ -394,9 +394,9 @@ int ha_blockchain::delete_row(const uchar *buf) {
     Table_name table_name(table->alias);
     auto bc_thd_data = ha_data_get(ha_thd(), table_name);
 
-    // If table scan cache is used, only add pending remove
+    // Only add pending remove
     // --> allows to further iterate over cache without invalidating iterator pointers
-    bc_thd_data->tx->add_remove(std::move(remove_op), use_table_scan_cache(), connector.get());
+    bc_thd_data->tx->add_remove(std::move(remove_op), true, connector.get());
 
     return 0;
   } else {
@@ -477,6 +477,8 @@ int ha_blockchain::index_last(uchar *) {
 
 int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
                               enum ha_rkey_function key_func) {
+  find_connector(table->alias);                              
+
   // Check that exact match is required
   if(key_func != HA_READ_KEY_EXACT) {
     return HA_ERR_WRONG_COMMAND;
@@ -488,36 +490,53 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
     return HA_ERR_WRONG_COMMAND;
   }
 
-  // set required zero bits
   uint initial_null_bytes = table->s->null_bytes;
-  memset(buf, 0, initial_null_bytes);
+  uint8_t key_size = (*(table->field))->field_length;
+  int value_size = table->s->reclength - key_size - initial_null_bytes;
+
+  // set required zero bits
+  memset(buf, 0, initial_null_bytes + key_size + value_size);
   uint pos = initial_null_bytes;
 
   // Extract key
-  uint8_t key_size = (*(table->field))->field_length;
   Byte_data key_BD(const_cast<uchar*>(key), key_size);
 
-  if(use_table_scan_cache()) {
+  if(in_transaction()) {
     Table_name table_name(table->alias);
     auto& tx = ha_data_get(ha_thd(), table_name)->tx;
-
-    // Ensure ts cache is filled
-    if(!tx->table_scan_data_filled) {
-      size_t value_size = table->s->reclength - key_size - table->s->null_bytes;
-      connector->table_scan_to_map(tx->table_scan_data, key_size, value_size);
-      tx->reapply_pending_operations();
-      tx->table_scan_data_filled = true;
-    }
 
     // Create temp key
     Managed_byte_data tmp_key(key_BD.data_size);
     memcpy(tmp_key.data->data(), key_BD.data, key_BD.data_size);
 
+    /*Execute a GET if
+      1. Table Scan Cache is not used
+      2. Table Scan Cache is used but key does not exist
+
+      + re-apply pending TX operations 
+    */
+
+    if(!use_table_scan_cache() || 
+        tx->table_scan_data.find(tmp_key) == tx->table_scan_data.end()) {
+          
+      // Get single value
+      Managed_byte_data tmp_tuple(key_size + value_size);
+      auto get_rc = connector->get(&key_BD, tmp_tuple.data->data(), value_size);
+      tmp_tuple.data->erase(tmp_tuple.data->begin(), tmp_tuple.data->begin() + key_size); // only keep value part
+      if(get_rc == 0) {
+        // Put value into cache
+        tx->table_scan_data[tmp_key] = std::move(tmp_tuple);
+
+        // Apply pending ops
+        tx->reapply_pending_operations();
+      } else {
+        return 0;
+      }
+    }
+
     // Search, extract and copy value
     auto iter = tx->table_scan_data.find(tmp_key);
-    if(iter != tx->table_scan_data.end()) {
-      // Copy only if value was found
-
+    if(iter != tx->table_scan_data.end()) { // Copy only if value was found
       // Copy key
       memcpy(&(buf[pos]), key_BD.data, key_BD.data_size);
       pos += key_BD.data_size;
@@ -525,9 +544,11 @@ int ha_blockchain::index_read(uchar *buf, const uchar *key, uint,
       // Copy value
       memcpy(&buf[pos], iter->second.data->data(), iter->second.data->size());
     }
+
+    if(!use_table_scan_cache()) {
+      tx->table_scan_data.clear();
+    }
   } else {
-    find_connector(table->alias);
-    int value_size = table->s->reclength - key_size - initial_null_bytes;
     connector->get(&key_BD, &(buf[pos]), value_size);
   }
 
@@ -558,10 +579,9 @@ int ha_blockchain::rnd_init(bool) {
   if(in_transaction()) {
     Table_name table_name(table->alias);
     auto& tx = ha_data_get(ha_thd(), table_name)->tx;
+    tx->pending_remove_activated = true;
 
-    if(use_table_scan_cache()) {
-      tx->pending_remove_activated = true;
-    } else {
+    if(!use_table_scan_cache()) {
       tx->table_scan_data.clear();
       tx->table_scan_data_filled = false;
     }
@@ -589,11 +609,10 @@ int ha_blockchain::rnd_end() {
   } else {
     Table_name table_name(table->alias);
     auto& tx = ha_data_get(ha_thd(), table_name)->tx;
-    if(use_table_scan_cache()) {
-      tx->apply_pending_remove_ops(connector.get());
-      tx->pending_remove_activated = false;
-    } else {
-      // Do not use table scan cache --> clear it
+    tx->apply_pending_remove_ops(connector.get());
+    tx->pending_remove_activated = false;
+
+    if(!use_table_scan_cache()) {
       tx->table_scan_data.clear();
     }
   }
