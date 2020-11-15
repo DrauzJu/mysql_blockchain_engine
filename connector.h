@@ -7,10 +7,11 @@
 #include "types.h"
 
 /*
- * Interface definition to be used by storage engine to communicate with
+ * Interface definitions to be used by storage engine to communicate with
  * concrete blockchain technology handler, like Ethereum
  */
 
+// One instance per table per connection
 class Connector {
  public:
   virtual ~Connector() {}
@@ -29,17 +30,7 @@ class Connector {
   /*
    * returns 0 on success, 1 on failure
    */
-  virtual int put_batch(std::vector<Put_op> * data, TXID txID = {{0}}) = 0;
-
-  /*
-   * returns 0 on success, 1 on failure
-   */
   virtual int remove(Byte_data* key, TXID txID = {{0}}) = 0;
-
-  /*
-   * returns 0 on success, 1 on failure
-   */
-  virtual int remove_batch(std::vector<Remove_op> * data, TXID txID = {{0}}) = 0;
 
   /*
    * Do a table scan, puts tuples in provided vector object (key+value concatenated)
@@ -63,5 +54,20 @@ class Connector {
    */
   virtual int clear_commit_prepare(boost::uuids::uuid txID) = 0;
 };
+
+// Singleton
+class transaction_connector {
+
+  /*
+   * returns 0 on success, 1 on failure
+   */
+  virtual int write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op> * remove_data) = 0;
+
+  /*
+   * returns 0 on success, 1 on failure
+   */
+  virtual int atomic_commit(TXID tx_ID, const std::vector<std::string>& addresses) = 0;
+
+}
 
 #endif  // MYSQL_8_0_20_CONNECTOR_H

@@ -74,36 +74,24 @@ contract KVStore {
         clean(txId);
     }
 
-    /// Stores multiplie key:value pairs in the storage.
+    /// Stores or removes multiplie key:value pairs in the storage.
     /// @param keys An array of keys to store
-    /// @param values An array of values correpsonding to the keys,
+    /// @param values An array of values to store correpsonding to the keys,
     ///  thereby keys[i] should correspond to values[i]
-    /// @dev stores the number in the state variable `data`
-    function putBatch(
-        bytes32[] memory keys,
-        bytes32[] memory values)
-    public
-    {
-        for (uint i = 0; i < keys.length; i++) {
-            Value memory v = Value(block.number,values[i]);
-
-            if(data[keys[i]].blocknumber == 0) {
-                keyList.push(keys[i]);
-            }
-
-            data[keys[i]] = v;
-        }
-    }
-
-    function putBatch(
+    /// @param removeKeys An array of keys to remove
+    /// @dev stores the number in the state variable `data` or removes from it
+    function writeBatch(
         bytes32[] memory keys,
         bytes32[] memory values,
-        bytes16 txId)
+        bytes32[] memory removeKeys)
     public
     {
         for (uint i = 0; i < keys.length; i++) {
-            TxOperation memory v = TxOperation(keys[i],values[i], false);
-            txBuffer[txId].push(v);
+            put(keys[i], values[i]);
+        }
+
+        for (uint j = 0; j < removeKeys.length; j++) {
+            remove(removeKeys[j]);
         }
     }
 
@@ -141,28 +129,6 @@ contract KVStore {
     {
         TxOperation memory v = TxOperation(key, 0, true);
         txBuffer[txId].push(v);
-    }
-
-    /// Removes multiple key:value pairs in the storage.
-    /// @param keys An array of keys to remove
-    function removeBatch(
-        bytes32[] memory keys)
-    public
-    {
-        for (uint i = 0; i < keys.length; i++) {
-            remove(keys[i]);
-        }
-    }
-
-    function removeBatch(
-        bytes32[] memory keys,
-        bytes16 txId)
-    public
-    {
-        for (uint i = 0; i < keys.length; i++) {
-            TxOperation memory v = TxOperation(keys[i], 0, true);
-            txBuffer[txId].push(v);
-        }
     }
 
     function tableScan()

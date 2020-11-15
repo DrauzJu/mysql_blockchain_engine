@@ -69,9 +69,8 @@ public:
 
     int get(Byte_data* key, unsigned char* buf, int value_size) override;
     int put(Byte_data* key, Byte_data* value, TXID txID) override;
-    int put_batch(std::vector<Put_op> * data, TXID txID) override;
+    int write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op> * remove_data) override;
     int remove(Byte_data *key, TXID txID) override;
-    int remove_batch(std::vector<Remove_op> * data, TXID txID) override;
     void table_scan_to_vec(std::vector<Managed_byte_data> &tuples, size_t key_length, size_t value_length) override;
     void table_scan_to_map(tx_cache_t& tuples, size_t key_kength, size_t value_length) override;
     int drop_table() override;
@@ -80,11 +79,6 @@ public:
     std::string call(RPC_params params, bool set_gas);
     std::string call(std::string& params, std::string& method);
     std::string check_mining_result(std::string& transaction_ID);
-    static int atomic_commit(std::string connection_string,
-                            std::string from_address,
-                            int max_waiting_time,
-                            std::string commit_contract_address, TXID tx_ID,
-                            const std::vector<std::string>& addresses);
 
    private:
     std::string _store_contract_address;
@@ -99,5 +93,27 @@ public:
     std::vector <std::string> table_scan_call();
     static size_t get_table_scan_results_size(std::vector<std::string> response);
 };
+
+class transaction_ethereum : public transaction_connector {
+
+  public:
+    int write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op> * remove_data) override;
+    int atomic_commit(TXID tx_ID, const std::vector<std::string>& addresses) override;
+    transaction_ethereum* get_instance();
+    void set_parameters(std::string connection_string,
+                            std::string from_address,
+                            int max_waiting_time,
+                            std::string commit_contract_address)
+
+  private:
+    std::string _connection_string;
+    std::string _from_address;
+    int _max_waiting_time;
+    std::string _commit_contract_address;
+    static transaction_ethereum* instance = nullptr;
+
+    explicit transaction_ethereum();
+
+}
 
 #endif  // MYSQL_8_0_20_ETHEREUM_H

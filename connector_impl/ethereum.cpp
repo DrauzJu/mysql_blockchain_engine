@@ -214,7 +214,7 @@ int Ethereum::put(Byte_data* key, Byte_data* value, TXID txid) {
     }
 }
 
-int Ethereum::put_batch(std::vector<Put_op>* data, TXID txid) {
+int Ethereum::write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op> * remove_data) {
   auto size = data->size();
 
   std::stringstream data_string;
@@ -564,13 +564,35 @@ int Ethereum::clear_commit_prepare(boost::uuids::uuid tx_ID) {
   }
 }
 
-int Ethereum::atomic_commit(std::string connection_string,
-                           std::string from_address,
-                           int max_waiting_time,
-                           std::string commit_contract_address, TXID tx_ID,
-                           const std::vector<std::string>& addresses) {
-  Ethereum ethInstance(std::move(connection_string), "",
-                       std::move(from_address), max_waiting_time);
+/*
+ * ---- TRANSACTION_ETHEREUM IMPLEMENTATION ----------------------------------
+ */
+
+transaction_ethereum* transaction_ethereum::get_instance() {
+  if(instance == nullptr) {
+    instance = new transaction_ethereum;
+  }
+
+  return instance;
+}
+
+void transaction_ethereum::set_parameters(std::string connection_string,
+                            std::string from_address,
+                            int max_waiting_time,
+                            std::string commit_contract_address) {
+  _connection_string = std::move(connection_string);
+  _from_address = std::move(from_address);
+  _max_waiting_time = max_waiting_time;
+  _commit_contract_address = std::move(commit_contract_address);
+}
+
+int transaction_ethereum::write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op> * remove_data) {
+  return 1;
+}
+
+int transaction_ethereum::atomic_commit(TXID tx_ID, const std::vector<std::string>& addresses) {
+  // Create instance to have access to some helper methods
+  Ethereum ethInstance(_connection_string, "", _from_address, _max_waiting_time);
 
   Byte_data bdTxid(tx_ID.data, 16);
   std::string txidVal = byte_array_to_hex(&bdTxid, 32);
@@ -612,16 +634,13 @@ int Ethereum::atomic_commit(std::string connection_string,
 	"50a5fd68": "getBatch(bytes32[])",
 	"4c667080": "put(bytes32,bytes32)",
 	"3c58dd03": "put(bytes32,bytes32,bytes16)",
-	"9b36675c": "putBatch(bytes32[],bytes32[])",
-	"0238a793": "putBatch(bytes32[],bytes32[],bytes16)",
 	"95bc2673": "remove(bytes32)",
 	"29a32c0a": "remove(bytes32,bytes16)",
-        "2d9bb756": "removeBatch(bytes32[])",
-        "702de045": "removeBatch(bytes32[],bytes16)",
 	"b3055e26": "tableScan()"
 }
 
 {
-        "334c1176": "commitAll(bytes16,address[])"
+	"408b49b9": "commitAll((bytes32,bytes32,bool,address)[])",
+	"334c1176": "commitAll(bytes16,address[])"
 }
  */

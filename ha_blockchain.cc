@@ -999,7 +999,7 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
       // Only wait until preparation is done
       success_prepare = tx->wait_for_commit_prepare_workers();
     } else {
-      // Prepare commit using batch operations
+      // Prepare call to write_batch
       if(!tx->get_put_operations()->empty()) {
         std::cout << "[BLOCKCHAIN] Preparing commit with " << tx->get_put_operations()->size() << " put operations" << std::endl;
         int rc_putBatch = connector->put_batch(tx->get_put_operations(), tx->get_ID());
