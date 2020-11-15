@@ -33,7 +33,7 @@ blockchain_table_tx::~blockchain_table_tx() {
   // std::cout << "Deleting TX: " + get_printable_id() + "\n";
 }
 
-void blockchain_table_tx::add_put(Put_op putOp, Connector* connector) {
+void blockchain_table_tx::add_put(Put_op putOp, table_connector* connector) {
   if(prepare_immediately) {
     // Send to blockchain tx buffer
     auto thread = std::thread([&, putOp, connector]() {
@@ -51,7 +51,7 @@ void blockchain_table_tx::add_put(Put_op putOp, Connector* connector) {
   put_operations.emplace_back(std::move(putOp));
 }
 
-void blockchain_table_tx::add_remove(Remove_op removeOp, bool pending, Connector* connector) {
+void blockchain_table_tx::add_remove(Remove_op removeOp, bool pending, table_connector* connector) {
   if(pending && pending_remove_activated) {
     pending_remove_operations.push(std::move(removeOp));
   } else {
@@ -99,7 +99,7 @@ void blockchain_table_tx::reapply_pending_operations() {
   }
 }
 
-void blockchain_table_tx::apply_pending_remove_ops(Connector* connector) {
+void blockchain_table_tx::apply_pending_remove_ops(table_connector* connector) {
   while (!pending_remove_operations.empty()) {
     auto pending_remove = std::move(pending_remove_operations.front());
     pending_remove_operations.pop();

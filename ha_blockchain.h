@@ -55,7 +55,7 @@
 */
 class ha_blockchain : public handler {
   my_off_t current_position; // current position during table scan
-  std::unique_ptr<Connector> connector;
+  std::unique_ptr<table_connector> connector;
   std::vector<Managed_byte_data> rnd_table_scan_data;
   static std::mutex ha_data_create_tx_mtx;
 
@@ -279,6 +279,7 @@ class ha_blockchain : public handler {
   int start_transaction(THD *thd);
   static int bc_commit(handlerton *hton, THD *thd, bool commit_trx);
   static int bc_rollback(handlerton *hton, THD *thd, bool all);
+  static transaction_connector* get_transaction_connector();
 
   /** @brief
     Unlike index_init(), rnd_init() can be called two consecutive times

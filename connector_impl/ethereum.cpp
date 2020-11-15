@@ -214,20 +214,13 @@ int Ethereum::put(Byte_data* key, Byte_data* value, TXID txid) {
     }
 }
 
-int Ethereum::write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op> * remove_data) {
+/*
+int Ethereum::write_batch(std::vector<Put_op> * data, std::vector<Remove_op> * remove_data) {
   auto size = data->size();
 
   std::stringstream data_string;
-  if(txid.is_nil()) {
-    data_string << numeric_to_hex(64);
-    data_string << numeric_to_hex(96 + 32 * size);
-  } else {
-    data_string << numeric_to_hex(96);
-    data_string << numeric_to_hex(128 + 32 * size);
-
-    Byte_data bdTxid(txid.data, 16);
-    data_string << byte_array_to_hex(&bdTxid);
-  }
+  data_string << numeric_to_hex(64);
+  data_string << numeric_to_hex(96 + 32 * size);
 
   // All keys
   data_string << numeric_to_hex(size); // number of keys
@@ -247,12 +240,7 @@ int Ethereum::write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op>
 
   RPC_params params;
   params.method = "eth_sendTransaction";
-
-  if(txid.is_nil()) {
-    params.data = "0x9b36675c" + data_string.str();
-  } else {
-    params.data = "0x0238a793" + data_string.str();
-  }
+  params.data = "0x9b36675c" + data_string.str();
 
   // log("Data: " + params.data, "PutBatch");
 
@@ -269,6 +257,7 @@ int Ethereum::write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op>
   }
 
 }
+*/
 
 int Ethereum::remove(Byte_data *key, TXID txid) {
 
@@ -297,50 +286,6 @@ int Ethereum::remove(Byte_data *key, TXID txid) {
         log("Failed: " + response, "Remove");
         return 1;
     }
-}
-
-int Ethereum::remove_batch(std::vector<Remove_op> * data, TXID txid) {
-  auto size = data->size();
-
-  std::stringstream data_string;
-  if(txid.is_nil()) {
-    data_string << numeric_to_hex(32);
-  } else {
-    data_string << numeric_to_hex(64);
-
-    Byte_data bdTxid(txid.data, 16);
-    data_string << byte_array_to_hex(&bdTxid);
-  }
-
-  // All keys
-  data_string << numeric_to_hex(size); // number of keys
-  for(ulong i=0; i<size; i++) {
-    auto& remove_op = data->at(i);
-    auto bd = Byte_data(remove_op.key.data->data(), remove_op.key.data->size());
-    data_string << byte_array_to_hex(&bd);
-  }
-
-  RPC_params params;
-  params.method = "eth_sendTransaction";
-
-  if(txid.is_nil()) {
-    params.data = "0x2d9bb756" + data_string.str();
-  } else {
-    params.data = "0x702de045" + data_string.str();
-  }
-
-  // log("Data: " + params.data, "removeBatch");
-
-  const std::string response = call(params, true);
-  // log("Response: " + response, "removeBatch");
-
-  if (response.find("error") == std::string::npos) {
-    log("success", "remove_batch");
-    return 0;
-  } else {
-    log("Failed: " + response, "remove_batch");
-    return 1;
-  }
 }
 
 void Ethereum::table_scan_to_vec(std::vector<Managed_byte_data> &tuples,
@@ -579,20 +524,33 @@ transaction_ethereum* transaction_ethereum::get_instance() {
 void transaction_ethereum::set_parameters(std::string connection_string,
                             std::string from_address,
                             int max_waiting_time,
-                            std::string commit_contract_address) {
+                            std::string commit_contract_address,
+                            std::unordered_map<Table_name, std::string>* table_contract_info) {
   _connection_string = std::move(connection_string);
   _from_address = std::move(from_address);
   _max_waiting_time = max_waiting_time;
   _commit_contract_address = std::move(commit_contract_address);
+  _table_contract_info = table_contract_info;
 }
 
-int transaction_ethereum::write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op> * remove_data) {
+void transaction_ethereum::translate_table_names(const std::vector<Table_name>& tables, std::vector<std::string>* addresses) {
+  for(auto& table : tables) {
+    addresses->emplace_back((*_table_contract_info)[table]);
+  }
+}
+
+
+int transaction_ethereum::write_batch(std::vector<Put_op> * , std::vector<Remove_op> * ) {
   return 1;
 }
 
-int transaction_ethereum::atomic_commit(TXID tx_ID, const std::vector<std::string>& addresses) {
+int transaction_ethereum::atomic_commit(TXID tx_ID, const std::vector<Table_name>& affected_tables) {
   // Create instance to have access to some helper methods
   Ethereum ethInstance(_connection_string, "", _from_address, _max_waiting_time);
+
+  // Transate table names to addresses
+  std::vector<std::string> addresses;
+  translate_table_names(affected_tables, &addresses);
 
   Byte_data bdTxid(tx_ID.data, 16);
   std::string txidVal = byte_array_to_hex(&bdTxid, 32);
@@ -612,7 +570,7 @@ int transaction_ethereum::atomic_commit(TXID tx_ID, const std::vector<std::strin
   RPC_params params;
   params.method = "eth_sendTransaction";
   params.data = "0x334c1176" + txidVal + address_string.str();
-  params.to = std::move(commit_contract_address);
+  params.to = _commit_contract_address;
 
   const std::string response = ethInstance.call(params, true);
 

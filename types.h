@@ -26,7 +26,7 @@ using Table_name = std::string;
 using byte = unsigned char;
 using TXID = boost::uuids::uuid;
 
-class Connector;
+class table_connector;
 class blockchain_table_tx;
 
 enum BC_TYPE {
@@ -35,7 +35,7 @@ enum BC_TYPE {
 
 typedef struct bc_ha_data_table_t {
   std::unique_ptr<blockchain_table_tx> tx;
-  Connector* connector;
+  table_connector* connector;
 } bc_ha_data_table_t;
 
 using ha_data_map = std::unordered_map<Table_name, std::unique_ptr<bc_ha_data_table_t>>;

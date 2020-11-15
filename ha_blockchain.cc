@@ -307,6 +307,7 @@ int ha_blockchain::write_row(uchar *buf) {
 
     Table_name table_name(table->alias);
     auto bc_thd_data = ha_data_get(ha_thd(), table_name);
+    put_op.table = table_name;
     bc_thd_data->tx->add_put(std::move(put_op), connector.get());
 
     return 0;
@@ -393,6 +394,7 @@ int ha_blockchain::delete_row(const uchar *buf) {
 
     Table_name table_name(table->alias);
     auto bc_thd_data = ha_data_get(ha_thd(), table_name);
+    remove_op.table = table_name;
 
     // Only add pending remove
     // --> allows to further iterate over cache without invalidating iterator pointers
@@ -966,18 +968,28 @@ int ha_blockchain::start_transaction(THD *thd) {
   return 0;
 }
 
+transaction_connector* ha_blockchain::get_transaction_connector() {
+  switch (config_type) {
+    case ETHEREUM: return transaction_ethereum::get_instance();
+    default: return nullptr;
+  }
+}
+
 int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
 
   if(!commit_trx) {
     return HA_ERR_WRONG_COMMAND;
   }
 
-  auto affected_tables = std::vector<Table_name>();
+  std::vector<Table_name> affected_tables;
   TXID txID;
+
+  std::vector<Put_op> all_put_ops;
+  std::vector<Remove_op> all_remove_ops;
 
   // For each table that took part in transaction, prepare commit
   for(auto& table_data : *ha_data_get_all(thd)) {
-    auto connector = table_data.second->connector;
+    // auto connector = table_data.second->connector;
     auto tx = std::move(table_data.second->tx);
 
     if(tx == nullptr) {
@@ -993,42 +1005,29 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
     affected_tables.emplace_back(table_data.first);
     txID = tx->get_ID();
 
-    bool success_prepare = true;
-
     if(config_tx_prepare_immediately) {
       // Only wait until preparation is done
-      success_prepare = tx->wait_for_commit_prepare_workers();
+      bool success_prepare = tx->wait_for_commit_prepare_workers();
+
+      if(!success_prepare) {
+        std::cerr << "Prepare of commit failed, will undo preparation of all involved tables. "
+                  << "Transaction is deleted, please create a new one! "
+                  << std::endl;
+        
+        auto allHAData = ha_data_get_all(thd);
+        for(auto& table : affected_tables) {
+          (*allHAData)[table]->connector->clear_commit_prepare(tx->get_ID());
+        }
+
+        // Notify MySQL core (see sql/handler.cc)
+        thd->transaction_rollback_request = true;
+
+        return HA_ERR_INTERNAL_ERROR;
+      }
     } else {
-      // Prepare call to write_batch
-      if(!tx->get_put_operations()->empty()) {
-        std::cout << "[BLOCKCHAIN] Preparing commit with " << tx->get_put_operations()->size() << " put operations" << std::endl;
-        int rc_putBatch = connector->put_batch(tx->get_put_operations(), tx->get_ID());
-        success_prepare = std::min(success_prepare, rc_putBatch == 0);
-        tx->get_put_operations()->clear();
-      }
-
-      if(!tx->get_remove_operations()->empty()) {
-        std::cout << "[BLOCKCHAIN] Preparing commit with " << tx->get_remove_operations()->size() << " remove operations" << std::endl;
-        int rc_removeBatch = connector->remove_batch(tx->get_remove_operations(), tx->get_ID());
-        success_prepare = std::min(success_prepare, rc_removeBatch == 0);
-        tx->get_remove_operations()->clear();
-      }
-    }
-
-    if(!success_prepare) {
-      std::cerr << "Prepare of commit failed, will undo preparation of all involved tables. "
-                << "Transaction is deleted, please create a new one! "
-                << std::endl;
-      auto allHAData = ha_data_get_all(thd);
-      for(auto& table : affected_tables) {
-        auto table_connector = (*allHAData)[table]->connector;
-        table_connector->clear_commit_prepare(tx->get_ID());
-      }
-
-      // Notify MySQL core (see sql/handler.cc)
-      thd->transaction_rollback_request = true;
-
-      return HA_ERR_INTERNAL_ERROR;
+      // move elements from transaction class to local vector
+      std::move(tx->get_put_operations()->begin(), tx->get_put_operations()->end(), std::back_inserter(all_put_ops));
+      std::move(tx->get_remove_operations()->begin(), tx->get_remove_operations()->end(), std::back_inserter(all_remove_ops));
     }
   }
 
@@ -1036,22 +1035,11 @@ int ha_blockchain::bc_commit(handlerton *, THD *thd, bool commit_trx) {
     return 0; // nothing to commit
   }
 
-  // Preparation of commit was successful --> call commit contract with all
-  // addresses to do atomic commit
-  auto addresses = std::vector<std::string>(affected_tables.size());
-  for(size_t i=0; i<affected_tables.size(); i++) {
-    addresses[i] = (*ha_blockchain::table_contract_info)[affected_tables[i]];
-  }
-
-  switch (config_type) {
-    case ETHEREUM: {
-      return Ethereum::atomic_commit(std::string(config_connection),
-                                    std::string(config_eth_from),
-                                    config_eth_max_waiting_time,
-                                    std::string(config_eth_tx_contract),
-                                    txID, addresses);
-    }
-    default: return HA_ERR_WRONG_COMMAND;
+  transaction_connector* transaction_connector_instance = ha_blockchain::get_transaction_connector();
+  if(config_tx_prepare_immediately) {
+    return transaction_connector_instance->atomic_commit(txID, affected_tables);
+  } else {
+    return transaction_connector_instance->write_batch(&all_put_ops, &all_remove_ops);
   }
 }
 
@@ -1072,8 +1060,8 @@ int ha_blockchain::bc_rollback(handlerton *, THD *thd, bool all) {
 
     if(config_tx_prepare_immediately) {
       tx->wait_for_commit_prepare_workers(); // ensure threads shut down gracefully
-      auto tableConnector = table_data.second->connector;
-      tableConnector->clear_commit_prepare(tx->get_ID());
+      auto table_connector = table_data.second->connector;
+      table_connector->clear_commit_prepare(tx->get_ID());
     }
   }
 

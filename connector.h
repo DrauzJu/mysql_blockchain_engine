@@ -12,9 +12,9 @@
  */
 
 // One instance per table per connection
-class Connector {
+class table_connector {
  public:
-  virtual ~Connector() {}
+  virtual ~table_connector() {}
 
   /*
    * Write single KV-pair (concatenated) into byte buffer buf
@@ -58,6 +58,7 @@ class Connector {
 // Singleton
 class transaction_connector {
 
+public:
   /*
    * returns 0 on success, 1 on failure
    */
@@ -66,8 +67,8 @@ class transaction_connector {
   /*
    * returns 0 on success, 1 on failure
    */
-  virtual int atomic_commit(TXID tx_ID, const std::vector<std::string>& addresses) = 0;
+  virtual int atomic_commit(TXID tx_ID, const std::vector<Table_name>& affected_tables) = 0;
 
-}
+};
 
 #endif  // MYSQL_8_0_20_CONNECTOR_H

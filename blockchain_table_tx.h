@@ -45,12 +45,12 @@ class blockchain_table_tx {
   blockchain_table_tx(THD* thd, int hton_slot, int prepare_immediately);
   ~blockchain_table_tx();
 
-  void add_put(Put_op putOp, Connector* connector);
-  void add_remove(Remove_op removeOp, bool pending, Connector* connector);
+  void add_put(Put_op putOp, table_connector* connector);
+  void add_remove(Remove_op removeOp, bool pending, table_connector* connector);
   std::vector<Put_op>* get_put_operations();
   std::vector<Remove_op>* get_remove_operations();
   void reapply_pending_operations();
-  void apply_pending_remove_ops(Connector* connector);
+  void apply_pending_remove_ops(table_connector* connector);
   TXID get_ID();
   bool wait_for_commit_prepare_workers();
   bool is_read_only();
