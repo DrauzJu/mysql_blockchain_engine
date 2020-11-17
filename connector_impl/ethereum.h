@@ -58,6 +58,18 @@ struct Transaction_nonce_exception : public std::exception
 };
 
 
+/*
+ * ---- HELPER METHODS ----------------------------------
+ */
+
+void log(const std::string& msg, const std::string& method = "");
+std::string byte_array_to_hex(Byte_data* data, int length=32);
+template<typename T> std::string numeric_to_hex(T num, int size=64);
+
+// -------------------------
+// class definition
+// -------------------------
+
 class Ethereum : public table_connector {
 
   public:
@@ -91,31 +103,6 @@ class Ethereum : public table_connector {
 
     std::vector <std::string> table_scan_call();
     static size_t get_table_scan_results_size(std::vector<std::string> response);
-};
-
-class transaction_ethereum : public transaction_connector {
-
-  public:
-    int write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op> * remove_data) override;
-    int atomic_commit(TXID tx_ID, const std::vector<Table_name>& affected_tables) override;
-    static transaction_ethereum* get_instance();
-    void set_parameters(std::string connection_string,
-                        std::string from_address,
-                        int max_waiting_time,
-                        std::string commit_contract_address,
-                        std::unordered_map<Table_name, std::string>* table_contract_info);
-
-  private:
-    std::string _connection_string;
-    std::string _from_address;
-    int _max_waiting_time;
-    std::string _commit_contract_address;
-    std::unordered_map<Table_name, std::string>* _table_contract_info;
-    static transaction_ethereum* instance;
-
-    explicit transaction_ethereum();
-    void translate_table_names(const std::vector<Table_name>& tables, std::vector<std::string>* addresses);
-
 };
 
 #endif  // MYSQL_8_0_20_ETHEREUM_H

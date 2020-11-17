@@ -107,13 +107,12 @@
 #include "typelib.h"
 
 #include "connector_impl/ethereum.h"
+#include "connector_impl/transaction_ethereum.h"
 
 static handler *blockchain_create_handler(handlerton *hton, TABLE_SHARE *table,
                                        bool partitioned, MEM_ROOT *mem_root);
 
-handlerton *blockchain_hton;
-
-// System variables for configuration
+// Static system variables for configuration
 static int config_type;
 static char* config_connection;
 static int config_use_ts_cache;
@@ -122,6 +121,24 @@ static char* config_eth_contracts;
 static char* config_eth_tx_contract;
 static char* config_eth_from;
 static int config_eth_max_waiting_time;
+
+// Create static members - ha_blockchain
+std::unordered_map<Table_name, std::string>* ha_blockchain::table_contract_info;
+std::mutex ha_blockchain::ha_data_create_tx_mtx;
+
+// Create static members - Ethereum
+std::atomic_uint64_t Ethereum::nonce;
+std::mutex Ethereum::nonce_init_mtx;
+
+// Create static members - transaction_ethereum
+std::string transaction_ethereum::_connection_string;
+std::string transaction_ethereum::_from_address;
+int transaction_ethereum::_max_waiting_time;
+std::string transaction_ethereum::_commit_contract_address;
+std::unordered_map<Table_name, std::string>* transaction_ethereum::_table_contract_info = nullptr;
+transaction_ethereum* transaction_ethereum::instance = nullptr;
+
+handlerton *blockchain_hton;
 
 /* Interface to mysqld, to check system tables supported by SE */
 static bool blockchain_is_supported_system_table(const char *db,
@@ -156,12 +173,6 @@ static handler *blockchain_create_handler(handlerton *hton, TABLE_SHARE *table,
                                        bool, MEM_ROOT *mem_root) {
   return new (mem_root) ha_blockchain(hton, table);
 }
-
-// Create static members
-std::unordered_map<Table_name, std::string>* ha_blockchain::table_contract_info;
-std::mutex ha_blockchain::ha_data_create_tx_mtx;
-std::atomic_uint64_t Ethereum::nonce;
-std::mutex Ethereum::nonce_init_mtx;
 
 ha_blockchain::ha_blockchain(handlerton *hton, TABLE_SHARE *table_arg)
     : handler(hton, table_arg) {
@@ -1175,10 +1186,17 @@ void ha_blockchain::find_connector(const char* full_table_name) {
         contract_address = searchAddress->second;
       }
 
-      connector = std::make_unique<Ethereum>(std::string(config_connection),
+      connector = std::make_unique<Ethereum>( std::string(config_connection),
                                               contract_address,
                                               std::string(config_eth_from),
                                               config_eth_max_waiting_time);
+
+      // Set parameters for Ethereum Transaction singleton
+      transaction_ethereum::set_parameters( std::string(config_connection), 
+                                            std::string(config_eth_from),
+                                            config_eth_max_waiting_time,
+                                            std::string(config_eth_tx_contract),
+                                            ha_blockchain::table_contract_info);
 
       break;
     }

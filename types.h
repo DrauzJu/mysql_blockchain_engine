@@ -27,6 +27,7 @@ using byte = unsigned char;
 using TXID = boost::uuids::uuid;
 
 class table_connector;
+class transaction_connector;
 class blockchain_table_tx;
 
 enum BC_TYPE {

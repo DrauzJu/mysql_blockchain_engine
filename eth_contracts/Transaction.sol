@@ -34,7 +34,7 @@ contract Transaction  {
         }
     }
 
-    function commitAll(
+    function writeBatch(
         TxOperation[] memory operations)
     public
     {
