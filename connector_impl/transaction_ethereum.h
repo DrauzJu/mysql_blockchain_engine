@@ -38,7 +38,6 @@ class transaction_ethereum : public transaction_connector {
     static std::unordered_map<Table_name, std::string>* _table_contract_info;
     static transaction_ethereum* instance;
 
-    explicit transaction_ethereum();
     void translate_table_names(const std::vector<Table_name>& tables, std::vector<std::string>* addresses);
 };
 

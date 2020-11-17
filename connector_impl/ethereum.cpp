@@ -24,15 +24,6 @@ std::string byte_array_to_hex(Byte_data* data, int length) {
     return ss.str();
 }
 
-template<typename T>
-std::string numeric_to_hex(T num, int size) {
-  std::stringstream ss;
-  ss << std::hex;
-  ss << std::setw(size) << std::setfill('0') << num;
-
-  return ss.str();
-}
-
 static size_t write_callback(char *contents, size_t size, size_t nmemb, void *userp) {
     ((std::string*)userp)->append(contents, size * nmemb);
     return size * nmemb;

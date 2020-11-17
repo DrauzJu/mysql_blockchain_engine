@@ -13,7 +13,7 @@ void transaction_ethereum::translate_table_names(const std::vector<Table_name>& 
 
 
 int transaction_ethereum::write_batch(std::vector<Put_op> * put_data, std::vector<Remove_op> * remove_data) {
-  auto total_size = put_data->size() + remove_data->size();
+  size_t total_size = put_data->size() + remove_data->size();
 
   std::stringstream data_string;
   data_string << numeric_to_hex(32);

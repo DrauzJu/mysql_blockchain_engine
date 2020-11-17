@@ -64,7 +64,16 @@ struct Transaction_nonce_exception : public std::exception
 
 void log(const std::string& msg, const std::string& method = "");
 std::string byte_array_to_hex(Byte_data* data, int length=32);
-template<typename T> std::string numeric_to_hex(T num, int size=64);
+
+// Implement here since its a template function
+template<typename T>
+std::string numeric_to_hex(T num, int size=64) {
+  std::stringstream ss;
+  ss << std::hex;
+  ss << std::setw(size) << std::setfill('0') << num;
+
+  return ss.str();
+}
 
 // -------------------------
 // class definition
