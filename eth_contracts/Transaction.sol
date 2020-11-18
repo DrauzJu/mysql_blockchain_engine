@@ -60,12 +60,18 @@ contract Transaction  {
             }
         }
         
-        // Call writeBatch for each store
+        // Call writeBatch for each store = table = contract instance
         for (uint i = 0; i < stores.length; i++) {
             address store = stores[i];
             
             KVStore kv = KVStore(store);
             kv.writeBatch(opsPerStore[store].keys, opsPerStore[store].values, opsPerStore[store].removeKeys);
+
+            // Clear mapping entry
+            opsPerStore[store].containsData = false;
+            delete opsPerStore[store].keys;
+            delete opsPerStore[store].values;
+            delete opsPerStore[store].removeKeys;
         }
         
         // Clear stores

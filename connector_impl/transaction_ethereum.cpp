@@ -67,13 +67,14 @@ int transaction_ethereum::write_batch(std::vector<Put_op> * put_data, std::vecto
   RPC_params params;
   params.method = "eth_sendTransaction";
   params.data = "0x1bf3eea5" + data_string.str();
+  params.to = _commit_contract_address;
 
-  // log("Data: " + params.data, "PutBatch");
+  // log("Data: " + params.data, "Write_Batch");
 
   // Create instance to have access to some helper methods
   Ethereum ethInstance(_connection_string, "", _from_address, _max_waiting_time);
   const std::string response = ethInstance.call(params, true);
-  // log("Response: " + response, "PutBatch");
+  // log("Response: " + response, "Write_Batch");
 
   if (response.find("error") == std::string::npos) {
     log("success", "Write_Batch");
